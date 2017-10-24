@@ -109,7 +109,7 @@ def move(arm, pos, rot, speed='Slow'):
         raise ValueError()
 
 
-def get_pos_rot_from_cpos(cpos):
+def get_pos_rot_from_cpos(cpos, nparrays=False):
     """
     It's annoying to have to do this every time. I just want two lists.
     To be clear, `cpos = arm.get_current_cartesian_position()`.
@@ -118,12 +118,15 @@ def get_pos_rot_from_cpos(cpos):
     rott = tfx.tb_angles(cpos.rotation)
     rot  = [rott.yaw_deg, rott.pitch_deg, rott.roll_deg]
     assert len(pos) == len(rot) == 3
+    if nparrays:
+        pos = np.array(pos)
+        rot = np.array(rot)
     return pos, rot
 
 
-def get_pos_rot_from_arm(arm):
+def get_pos_rot_from_arm(arm, nparrays=False):
     """ Since I don't want to keep tying the get_current_car ... """
-    return get_pos_rot_from_cpos(arm.get_current_cartesian_position())
+    return get_pos_rot_from_cpos(arm.get_current_cartesian_position(), nparrays)
 
 
 # ------------
@@ -133,6 +136,7 @@ def get_pos_rot_from_arm(arm):
 
 def store_pickle(fname, info, mode='w'):
     """ Overrides (due to `w`) by default. """
+    assert fname[-2:] == '.p'
     f = open(fname, mode)
     pickle.dump(info, f)
     f.close()
@@ -160,7 +164,12 @@ def load_pickle_to_list(filename, squeeze=True):
  
 
 def call_wait_key(nothing=None, exit=True):
-    """ Call this like: `utils.call_wait_key( cv2.imshow(...) )`. """
+    """ Call this like: `utils.call_wait_key( cv2.imshow(...) )`. 
+    
+    Normally, pressing ESC just terminates the program with `sys.exit()`. However
+    in some cases I want the program to continue and the ESC was just to get it
+    to exit a loop. In that case, set `exit=False`.
+    """
     ESC_KEYS = [27, 1048603]
     key = cv2.waitKey(0)
     if key in ESC_KEYS:
