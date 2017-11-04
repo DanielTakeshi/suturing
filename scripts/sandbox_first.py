@@ -28,9 +28,9 @@ Usage example:
     python scripts/sandbox_first.py --test 1 --test_method 1
     python scripts/sandbox_first.py --test 1 --test_method 0 --fname tmp/tmp_pos_revised.p
 
-So, first have humans provide the demonstrations. Then roll it out but the human
-corrects for it (you might run this several times), Then roll it out entirely
-open loop.
+First have humans provide the demonstrations. Then roll it out but the human
+corrects for it (run this several times), Then roll it out entirely open loop.
+The `fname` is needed for the second argument to use the revised positions.
 """
 
 from autolab.data_collector import DataCollector

@@ -3,7 +3,7 @@
 from autolab.data_collector import DataCollector
 from dvrk.robot import robot
 import cv2
-# import image_geometry
+# import image_geometry # ?? Why does this not work anymore?
 import numpy as np
 import os
 import pickle
@@ -18,50 +18,18 @@ np.set_printoptions(suppress=True)
 # ------------
 
 ESC_KEYS     = [27, 1048603]
-
 ## C_LEFT_INFO  = pickle.load(open('config/camera_info_matrices/left.p',  'r'))
 ## C_RIGHT_INFO = pickle.load(open('config/camera_info_matrices/right.p', 'r'))
 ## STEREO_MODEL = image_geometry.StereoCameraModel()
 ## STEREO_MODEL.fromCameraInfo(C_LEFT_INFO, C_RIGHT_INFO)
-##
-## #PSM1 home position
-## HOME_POSITION_PSM1 = ((0.00, 0.06, -0.13), (0.0, 0.0,-160.0))
-## 
-## #PSM2 home position
-## HOME_POSITION_PSM2 =  ((-0.015,  0.06, -0.10), (180,-20.0, 160))
-## 
-## #Safe speed
-## SAFE_SPEED = 0.005
-## 
-## #Fast speed
-## FAST_SPEED = 0.03
-## 
-## def IMAGE_PREPROCESSING_DEFAULT(img, grayscale_only=False):
-##     """ Set the parameters of the default image processing. """
-##     if grayscale_only:
-##         return cv2.cvtColor(img.copy(), cv2.COLOR_BGR2GRAY)
-##     else:
-##         img = cv2.medianBlur(img, 9)
-##         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-##         img = cv2.bilateralFilter(img, 7, 13, 13)
-##         return cv2.Canny(img,100,200)
-##
-##
+
+
 ## def camera_pixels_to_camera_coords(left_pt, right_pt):
 ##     """ Given [lx,ly] and [rx,ry], determine [cx,cy,cz]. Everything should be LISTS. """
 ##     assert len(left_pt) == len(right_pt) == 2
 ##     disparity = np.linalg.norm( np.array(left_pt) - np.array(right_pt) )
 ##     (xx,yy,zz) = STEREO_MODEL.projectPixelTo3d( (left_pt[0],left_pt[1]), disparity )
 ##     return [xx, yy, zz] 
-
-
-def init(sleep_time=2):
-    """ This is often used in the start of every script. """
-    d = DataCollector()
-    r1 = robot("PSM1") # left (but my right)
-    r2 = robot("PSM2") # right (but my left)
-    time.sleep(sleep_time)
-    return (r1,r2,d)
 
 
 ## def home(arm1=None, arm2=None, rot1=None, rot2=None):
@@ -77,6 +45,15 @@ def init(sleep_time=2):
 ##     #else:
 ##     #    move(arm1, pos=[0.00, 0.06, -0.15], rot=[0,10,-165], SPEED_CLASS='Fast')
 ##     #    move(arm2, pos=[0.00, 0.06, -0.15], rot=[0,10,-165], SPEED_CLASS='Fast')
+
+
+def init(sleep_time=2):
+    """ This is often used in the start of every script. """
+    d = DataCollector()
+    r1 = robot("PSM1") # left (but my right)
+    r2 = robot("PSM2") # right (but my left)
+    time.sleep(sleep_time)
+    return (r1,r2,d)
 
 
 def move(arm, pos, rot, speed='Slow'):
@@ -127,6 +104,17 @@ def get_pos_rot_from_cpos(cpos, nparrays=False):
 def get_pos_rot_from_arm(arm, nparrays=False):
     """ Since I don't want to keep tying the get_current_car ... """
     return get_pos_rot_from_cpos(arm.get_current_cartesian_position(), nparrays)
+
+
+def filter_point(x, y, xlower, xupper, ylower, yupper):
+    """ 
+    Used in case we want to filter out contours that aren't in some area. 
+    Returns True if we _should_ ignore the point.
+    """
+    ignore = False
+    if (x < xlower or x > xupper or y < ylower or y > yupper):
+        ignore = True
+    return ignore
 
 
 # ------------
@@ -181,31 +169,8 @@ def call_wait_key(nothing=None, exit=True):
     return key
 
 
-## def save_images(d):
-##     """ For debugging/visualization of DataCollector. """
-##     cv2.imwrite(IMAGE_DIR+"left_proc.png",  d.left_image_proc)
-##     cv2.imwrite(IMAGE_DIR+"left_gray.png",  d.left_image_gray)
-##     #cv2.imwrite(IMAGE_DIR+"right_proc.png", d.right_image_proc)
-##     #cv2.imwrite(IMAGE_DIR+"right_gray.png", d.right_image_gray)
-## 
-## 
-## def show_images(d):
-##     """ For debugging/visualization of DataCollector. """
-##     #call_wait_key(cv2.imshow("Left Processed", d.left_image_proc))
-##     #call_wait_key(cv2.imshow("Left Gray",      d.left_image_gray))
-##     call_wait_key(cv2.imshow("Left BoundBox",  d.left_image_bbox))
-##     #call_wait_key(cv2.imshow("Left Circles",   d.left_image_circles))
-##     #print("Circles (left):\n{}".format(d.left_circles))
-## 
-## 
-## def get_num_stuff_in_pickle_file(filename):
-##     """ Counting stuff in a pickle file! """
-##     f = open(filename,'r')
-##     num = 0
-##     while True:
-##         try:
-##             d = pickle.load(f)
-##             num += 1
-##         except EOFError:
-##             break
-##     return num
+def save_images(d, image_dir='images/'):
+    """ For debugging/visualization of DataCollector. """
+    for (lkey, rkey) in zip(d.left, d.right):
+        cv2.imwrite(image_dir+lkey+"_left.png", d.left[lkey])
+        cv2.imwrite(image_dir+rkey+"_right.png", d.right[rkey])
