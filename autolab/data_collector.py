@@ -32,8 +32,8 @@ class DataCollector:
         self.right = {}
 
         # Bounding box of points, to filter away any nonsense.
-        self.lx, self.ly, self.lw, self.lh = 675, 300, 750, 550
-        self.rx, self.ry, self.rw, self.rh = 600, 300, 750, 550
+        self.lx, self.ly, self.lw, self.lh = 675, 300, 750, 750
+        self.rx, self.ry, self.rw, self.rh = 600, 300, 750, 750
         self.left_apply_bbox  = True
         self.right_apply_bbox = True
 
@@ -77,7 +77,7 @@ class DataCollector:
 
         sr['raw'] = self.bridge.imgmsg_to_cv2(msg, "rgb8")
         sr['bbox'] = self.make_bounding_box(sr['raw'], x,y,w,h)
-        #sr['needle'] = self._detect_needle(sr['raw'])
+        sr['bin_mask'] = self._binary_mask(sr['raw'])
         sr['proc_default'] = self._preproc_default(sr['raw'])
         self.right_contours = self._get_contours(sr['proc_default'])
 
@@ -90,16 +90,24 @@ class DataCollector:
 
         sl['raw'] = self.bridge.imgmsg_to_cv2(msg, "rgb8")
         sl['bbox'] = self.make_bounding_box(sl['raw'], x,y,w,h)
-        #sl['needle'] = self._detect_needle(sl['raw'])
+        sl['bin_mask'] = self._binary_mask(sl['raw'])
         sl['proc_default'] = self._preproc_default(sl['raw'])
         self.left_contours = self._get_contours(sl['proc_default'])
 
-    # helpers
+    ###########
+    # Helpers #
+    ###########
 
     def get_left_bounds(self):
         return self.lx, self.ly, self.lw, self.lh
     def get_right_bounds(self):
         return self.rx, self.ry, self.rw, self.rh
+
+    
+    def _binary_mask(self, img):
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        ret, thresh = cv2.threshold(img.copy(), 127, 255, cv2.THRESH_BINARY)
+        return thresh
 
 
     def _preproc_default(self, img):
