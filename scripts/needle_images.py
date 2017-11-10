@@ -184,17 +184,29 @@ def detect_contours_known_setting(img, bb, index):
         out = cv2.cvtColor(out, cv2.COLOR_BGR2GRAY)
         out = cv2.bilateralFilter(out , 7, 13, 13)
         out = cv2.Canny(out, 100, 200) 
+        iterate_through_contours(image_raw=img, image_c=out, bb=bb)
 
     elif index == 1:
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         ret, out = cv2.threshold(img, 110, 255, cv2.THRESH_BINARY)
         out = cv2.medianBlur(out, 9)
         out = cv2.bilateralFilter(out, 7, 13, 13)
-    
+        iterate_through_contours(image_raw=img, image_c=out, bb=bb)
+
+    elif index == 2:
+        # From Sanjay.
+        image = img.copy()
+        hsv = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2HSV)
+        lower = np.array([0,0,0])
+        upper = np.array([255,50,255])
+        mask = cv2.inRange(image, lower, upper)
+        out = cv2.bitwise_and(image, image, mask=mask)
+        cv2.imshow('here it is, bitwise and on the original image', out)
+        key = cv2.waitKey(0)
+
     else:
         raise ValueError()
 
-    iterate_through_contours(image_raw=img, image_c=out, bb=bb)
 
 
 if __name__ == "__main__":
@@ -214,5 +226,5 @@ if __name__ == "__main__":
     # Try different methods.
     #detect_via_ellipse(d, image.copy(), bb)
     #detect_via_binary_masks(image.copy(), bb)
-    detect_via_color_segm(image.copy(), bb)
-    #detect_contours_known_setting(image.copy(), bb, index=1)
+    #detect_via_color_segm(image.copy(), bb)
+    detect_contours_known_setting(image.copy(), bb, index=2)

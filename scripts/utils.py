@@ -47,7 +47,7 @@ ESC_KEYS     = [27, 1048603]
 ##     #    move(arm2, pos=[0.00, 0.06, -0.15], rot=[0,10,-165], SPEED_CLASS='Fast')
 
 
-def init(sleep_time=2):
+def init(sleep_time=0):
     """ This is often used in the start of every script. """
     d = DataCollector()
     r1 = robot("PSM1") # left (but my right)
@@ -70,7 +70,7 @@ def move(arm, pos, rot, speed='Slow'):
     SPEED_CLASS: [String]
         Slow, Medium, or Fast.
     """
-    if pos[2] < -0.18:
+    if pos[2] < -0.17:
         raise ValueError("Desired z-coord of {} is not safe! Terminating!".format(pos[2]))
     if speed == 'Slow':
         arm.move_cartesian_frame_linear_interpolation(
@@ -86,7 +86,7 @@ def move(arm, pos, rot, speed='Slow'):
         raise ValueError()
 
 
-def get_pos_rot_from_cpos(cpos, nparrays=False):
+def pos_rot_cpos(cpos, nparrays=False):
     """
     It's annoying to have to do this every time. I just want two lists.
     To be clear, `cpos = arm.get_current_cartesian_position()`.
@@ -101,9 +101,9 @@ def get_pos_rot_from_cpos(cpos, nparrays=False):
     return pos, rot
 
 
-def get_pos_rot_from_arm(arm, nparrays=False):
+def pos_rot_arm(arm, nparrays=False):
     """ Since I don't want to keep tying the get_current_car ... """
-    return get_pos_rot_from_cpos(arm.get_current_cartesian_position(), nparrays)
+    return pos_rot_cpos(arm.get_current_cartesian_position(), nparrays)
 
 
 def filter_point(x, y, xlower, xupper, ylower, yupper):
@@ -131,9 +131,7 @@ def store_pickle(fname, info, mode='w'):
 
 
 def load_pickle_to_list(filename, squeeze=True):
-    """ 
-    Load from pickle file in a list, helpful if we've appended lots of stuff. 
-    """
+    """  Load from pickle file in a list, helpful if we've appended a lot.  """
     f = open(filename,'r')
     data = []
     while True:
