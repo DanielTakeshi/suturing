@@ -3,7 +3,7 @@
 from autolab.data_collector import DataCollector
 from dvrk.robot import robot
 import cv2
-# import image_geometry # ?? Why does this not work anymore?
+import image_geometry
 import numpy as np
 import os
 import pickle
@@ -18,18 +18,18 @@ np.set_printoptions(suppress=True)
 # ------------
 
 ESC_KEYS     = [27, 1048603]
-## C_LEFT_INFO  = pickle.load(open('config/camera_info_matrices/left.p',  'r'))
-## C_RIGHT_INFO = pickle.load(open('config/camera_info_matrices/right.p', 'r'))
-## STEREO_MODEL = image_geometry.StereoCameraModel()
-## STEREO_MODEL.fromCameraInfo(C_LEFT_INFO, C_RIGHT_INFO)
+C_LEFT_INFO  = pickle.load(open('config/camera_info_matrices/left.p',  'r'))
+C_RIGHT_INFO = pickle.load(open('config/camera_info_matrices/right.p', 'r'))
+STEREO_MODEL = image_geometry.StereoCameraModel()
+STEREO_MODEL.fromCameraInfo(C_LEFT_INFO, C_RIGHT_INFO)
 
 
-## def camera_pixels_to_camera_coords(left_pt, right_pt):
-##     """ Given [lx,ly] and [rx,ry], determine [cx,cy,cz]. Everything should be LISTS. """
-##     assert len(left_pt) == len(right_pt) == 2
-##     disparity = np.linalg.norm( np.array(left_pt) - np.array(right_pt) )
-##     (xx,yy,zz) = STEREO_MODEL.projectPixelTo3d( (left_pt[0],left_pt[1]), disparity )
-##     return [xx, yy, zz] 
+def camera_pixels_to_camera_coords(left_pt, right_pt):
+    """ Given [lx,ly] and [rx,ry], determine [cx,cy,cz]. Everything should be LISTS. """
+    assert len(left_pt) == len(right_pt) == 2
+    disparity = np.linalg.norm( np.array(left_pt) - np.array(right_pt) )
+    (xx,yy,zz) = STEREO_MODEL.projectPixelTo3d( (left_pt[0],left_pt[1]), disparity )
+    return [xx, yy, zz] 
 
 
 def init(sleep_time=0):

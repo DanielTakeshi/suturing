@@ -84,6 +84,11 @@ def specify_throws(args, d, which):
 
     Then we save the points, reset the list of points (that's why we need to
     fetch them with `global`) and do the same with the other camera image.
+
+    BTW, if the user does this with a piece of paper that has lines, then we
+    should just pull the piece of paper out once we have the correct desired
+    points (if the paper is thin enough, the dvrk camera won't know about the
+    height difference).
     """
     global BACK_POINTS, FRONT_POINTS, image
     if which == 'left':

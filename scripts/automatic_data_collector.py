@@ -4,14 +4,30 @@ main method for the hyperparameters.
 
 Usage: run in a two-stage process. Run this the first time for some manual
 intervention to determine the boundaries of the workspace and the height bounds.
-The second time is when the real action begins and the trajectories can be run a
-lot.
+The second time is when the real action begins and the trajectories can be run.
+The third run is for data cleaning.
 
-This code saves as we go, not at the end, so that it's robust to cases when the
-dVRK might fail (e.g. that MTM reading error we've been seeing a lot lately).
+    STAGE 1: Make sure the four corners are in areas near the center of the
+    camera. We don't want to emphasize the edges, yet.
 
-NOTE: when running this for real, be sure to feed (i.e. `tee`) the output into a
-file for my own future reference, or have this code write to a file.
+    STAGE 2: to vary the gripper orientation, start the second stage by having
+    the gripper grip the needle on a flat surface. Then it moves and starts off.
+    This must be done after each set, which may consist of several trajectories.
+
+        ALSO, to make sure that the dVRK doesn't crash, we should limit the
+        magnitude of change.
+
+        TODO: add more constraints, so that we're in the more likely areas where
+        the dVRK will want to "enter" the gripper? Some of the default angle
+        configurations won't have this correct setup.
+
+    STAGE 3: in progress ...
+
+Note I: the code saves at the end of each trajectory, so it's robust to cases
+when the dVRK might fail (e.g., that MTM reading error).
+
+NOTE II: when running this for real, be sure to feed (i.e. `tee`) the output
+into a file for my own future reference, or have this code write to a file.
 
 (c) 2017/2018 by Daniel Seita
 """
@@ -85,69 +101,6 @@ class AutoDataCollector:
         return res
 
 
-    ### def _get_contour(self, image, left):
-    ###     """ 
-    ###     Given `image` in HSV format, get the contour center. This is the WRIST position
-    ###     of the robot w.r.t. camera pixels, as the end-effector is hard to work with.
-    ###     AND return the center of the contour!
-    ###     """
-    ###     image = cv2.cvtColor(image, cv2.COLOR_HSV2BGR) 
-    ###     image_bgr = image.copy()
-
-    ###     # Detect contours *inside* the bounding box (a heuristic).
-    ###     if left:
-    ###         xx, yy, ww, hh = self.d.get_left_bounds()
-    ###     else:
-    ###         xx, yy, ww, hh = self.d.get_right_bounds()
-
-    ###     # Note that contour detection requires a single channel image.
-    ###     (cnts, _) = cv2.findContours(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), 
-    ###                                  cv2.RETR_TREE, 
-    ###                                  cv2.CHAIN_APPROX_SIMPLE)
-    ###     contained_cnts = []
-
-    ###     # Find the centroids of the contours in _pixel_space_.
-    ###     for c in cnts:
-    ###         try:
-    ###             M = cv2.moments(c)
-    ###             cX = int(M["m10"] / M["m00"])
-    ###             cY = int(M["m01"] / M["m00"])
-    ###             # Enforce it to be within bounding box.
-    ###             if (xx < cX < xx+ww) and (yy < cY < yy+hh):
-    ###                 contained_cnts.append(c)
-    ###         except:
-    ###             pass
-
-    ###     # Go from `contained_cnts` to a target contour and process it. And to be clear, 
-    ###     # we're only using the LARGEST contour, which SHOULD be the colored tape!
-    ###     if len(contained_cnts) > 0:
-    ###         target_contour = sorted(contained_cnts, key=cv2.contourArea, reverse=True)[0] # Index 0
-    ###         try:
-    ###             M = cv2.moments(target_contour)
-    ###             cX = int(M["m10"] / M["m00"])
-    ###             cY = int(M["m01"] / M["m00"])
-    ###             peri = cv2.arcLength(target_contour, True)
-    ###             approx = cv2.approxPolyDP(target_contour, 0.02*peri, True)
-
-    ###             # Draw them on the `image_bgr` to return, for visualization purposes.
-    ###             cv2.circle(image_bgr, (cX,cY), 50, (0,0,255))
-    ###             cv2.drawContours(image_bgr, [approx], -1, (0,255,0), 3)
-    ###             cv2.putText(img=image_bgr, 
-    ###                         text="{},{}".format(cX,cY), 
-    ###                         org=(cX+10,cY+10), 
-    ###                         fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-    ###                         fontScale=1, 
-    ###                         color=(255,255,255), 
-    ###                         thickness=2)
-    ###         except:
-    ###             pass
-    ###         return image_bgr, (cX,cY)
-
-    ###     else:
-    ###         # Failed to find _any_ contour.
-    ###         return image_bgr, (-1,-1) 
-
-
     def _sample_yaw(self, old_yaw=None):
         """ Samples a valid yaw, with mechanism to prevent large changes. """
         yaw = np.random.uniform(low=self.info['min_yaw'], high=self.info['max_yaw'])
@@ -157,20 +110,62 @@ class AutoDataCollector:
         return yaw
 
 
-    def _sample_pitch(self):
+    def _sample_pitch(self, old_pitch=None):
         """ Samples a valid pitch. """
         return np.random.uniform(low=self.info['min_pitch'], high=self.info['max_pitch'])
 
 
-    def _sample_roll(self):
+    def _sample_roll(self, old_roll=None):
         """ Samples a valid roll, & handle roll being negative. """
         if self.require_negative_roll:
+            # I don't think we should be here.
+            raise ValueError("shouldn't be in negative roll case")
             roll = np.random.uniform(low=self.info['min_roll'], high=self.info['max_roll']) 
         else:
             roll = np.random.uniform(low=-180, high=180) 
             while (self.info['roll_neg_ubound'] < roll < self.info['roll_pos_lbound']):
                 roll = np.random.uniform(low=-180, high=180) 
         return roll
+
+    
+    def _sample_safe_rotation(self, prev_rot):
+        """ 
+        Need to tune these limit ranges!! Sample rotation repeatedly until all
+        the safety checks pass.
+        """
+        ylim = 90
+        plim = 20
+        rlim = 20
+
+        prev_roll = prev_rot[2]
+        if prev_roll < 0:
+            prev_roll += 360.
+
+        while True:
+            possible_rot = [self._sample_yaw(), self._sample_pitch(), self._sample_roll()]
+            # ------------------------------------------------------------------
+            # Ah, but roll could be from (-180,-K) u (K,180). Thus, we add 360
+            # to the negative values to make it (K,180) to (180,360-K). If the
+            # previous roll was 170 deg., and current one is -180, then it's
+            # really close by 10 degrees. If current is -140, should be farther
+            # ... which it is as 360-140=220, so the gap is 50 degrees.
+            # ------------------------------------------------------------------
+            curr_roll = possible_rot[0]
+            if curr_roll < 0:
+                curr_roll += 360.
+
+            y_cond = abs(possible_rot[0] - prev_rot[0]) < ylim
+            p_cond = abs(possible_rot[1] - prev_rot[1]) < plim
+            r_cond = abs(prev_roll - curr_roll) < rlim
+
+            if y_cond and p_cond and r_cond:
+                break
+            else:
+                random_rotation_str = ["%.2f" % v for v in possible_rot]
+                print("    _not_ accepting rot:  {} due to y,p,r={},{},{}".format(
+                    random_rotation_str, y_cond, p_cond, r_cond))
+ 
+        return possible_rot
 
 
     def _save_images(self, this_dir, num, rr):
@@ -211,7 +206,7 @@ class AutoDataCollector:
     def collect_trajectories(self):
         """ Runs the robot and collects `self.num_trajs` trajectories. 
         
-        0. Put the needle in the gripper; there is natural variability which is OK.
+        0. Let the gripper grip the needle; there is natural variability which is OK.
         1. Move to one of the pre-selected home positions (from stage 1) at random.
         2. Choose a random location of (x,y,z) that is within legal and safe range.
         3. Make the arm to move there, but stop it periodically along its trajectory.
@@ -277,7 +272,7 @@ class AutoDataCollector:
                 print("\ninterval {} of {}, mid_pose: {}".format(ii+1, tinterval, mid_pose))
                 frame = self.arm.get_current_cartesian_position() # The _actual_ pose.
                 this_pos, this_rot = U.pos_rot_cpos(frame)
-                old_yaw = this_rot[0]
+                previous_rotation = this_rot
 
                 # After moving there (keeping rotation fixed) we record information.
                 num = str(intervals_in_traj).zfill(3) # Increments by 1 each non-rotation movement.
@@ -285,17 +280,20 @@ class AutoDataCollector:
                 traj_poses.append( (frame,l_center,r_center) )
            
                 for rr in range(1, self.rots_per_stoppage+1):
-                    # Pick a random rotation and move there. Update `old_yaw` as well.
-                    random_rotation = [self._sample_yaw(old_yaw), 
-                                       self._sample_pitch(), 
-                                       self._sample_roll()]
-                    old_yaw = random_rotation[0]
+                    # Pick a random but SAFE rotation, and move there.
+                    random_rotation = self._sample_safe_rotation(previous_rotation)
+                    random_rotation_str = ["%.2f" % v for v in random_rotation]
+                    print("    rot {}, _final_ target rot:  {}".format(rr, random_rotation_str))
+                    
+                    # Now actually MOVE to this rotation, w/"same" position.
                     U.move(self.arm, this_pos, random_rotation)
                     time.sleep(4)
                     frame = self.arm.get_current_cartesian_position()
-                    random_rotation_str = ["%.2f" % v for v in random_rotation]
-                    print("    rot {}, target rot:  {}".format(rr, random_rotation_str))
                     print("    rot {}, actual pose: {}".format(rr, frame))
+
+                    # Set our previous rotation to be the ACTUAL rotation.
+                    _, this_rot_1 = U.pos_rot_cpos(frame)
+                    previous_rotation = this_rot_1
 
                     # Record information.
                     l_center, r_center = self._save_images(this_dir, num, str(rr))
@@ -331,13 +329,13 @@ def collect_guidelines(args, arm, d):
     info = {}
     info['min_yaw']   = -90
     info['max_yaw']   =  90
-    info['min_pitch'] = -30
-    info['max_pitch'] =  30
+    info['min_pitch'] = -40
+    info['max_pitch'] =  40
 
     # TODO (11/10/17) I'm not totally sure these values are good for our task
     # --- will have to tune these! 
-    info['roll_neg_ubound'] = -150 # (-180, roll_neg_ubound)
-    info['roll_pos_lbound'] =  150 # (roll_pos_lbound, 180)
+    info['roll_neg_ubound'] = -140 # (-180, roll_neg_ubound)
+    info['roll_pos_lbound'] =  140 # (roll_pos_lbound, 180)
     info['min_roll'] = -180
     info['max_roll'] = -150
 
@@ -410,7 +408,7 @@ if __name__ == "__main__":
     pp = argparse.ArgumentParser()
     pp.add_argument('--stage', type=int, help='Must be 0, 1 or 2.')
     pp.add_argument('--directory', type=str, default='traj_collector/guidelines.p')
-    pp.add_argument('--num_trajs', type=int, default=1)
+    pp.add_argument('--num_trajs', type=int, default=1) # TODO: think, depends on needle grip
     pp.add_argument('--rots_per_stoppage', type=int, default=3)
     pp.add_argument('--interpolation_interval', type=int, default=20)
     args = pp.parse_args()
@@ -424,12 +422,12 @@ if __name__ == "__main__":
         collect_guidelines(args, arm1, d)
 
     elif args.stage == 1:
-        print("Stage 1, performing auto data collection.")
+        print("Stage 1, auto data collection. DID THE GRIPPER GRIP THE NEEDLE?")
         adc_args = {}
         adc_args['d'] = d
         adc_args['arm'] = arm1
         adc_args['z_offset'] = 0.005 # TODO is this needed?
-        adc_args['require_negative_roll'] = True # TODO is this needed?
+        adc_args['require_negative_roll'] = False # TODO I _think_ `False` is what we need
         adc_args['num_trajs'] = args.num_trajs
         adc_args['rots_per_stoppage'] = args.rots_per_stoppage
         adc_args['guidelines_dir'] = args.directory
@@ -543,3 +541,68 @@ if __name__ == "__main__":
 ###     #proc_left, proc_right = process_data(clean_data)
 ###     #pickle.dump(proc_left,  open('config/grid_auto/auto_calib_left_00.p', 'w'))
 ###     #pickle.dump(proc_right, open('config/grid_auto/auto_calib_right_00.p', 'w'))
+
+
+    ### def _get_contour(self, image, left):
+    ###     """ 
+    ###     Given `image` in HSV format, get the contour center. This is the WRIST position
+    ###     of the robot w.r.t. camera pixels, as the end-effector is hard to work with.
+    ###     AND return the center of the contour!
+    ###     """
+    ###     image = cv2.cvtColor(image, cv2.COLOR_HSV2BGR) 
+    ###     image_bgr = image.copy()
+
+    ###     # Detect contours *inside* the bounding box (a heuristic).
+    ###     if left:
+    ###         xx, yy, ww, hh = self.d.get_left_bounds()
+    ###     else:
+    ###         xx, yy, ww, hh = self.d.get_right_bounds()
+
+    ###     # Note that contour detection requires a single channel image.
+    ###     (cnts, _) = cv2.findContours(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), 
+    ###                                  cv2.RETR_TREE, 
+    ###                                  cv2.CHAIN_APPROX_SIMPLE)
+    ###     contained_cnts = []
+
+    ###     # Find the centroids of the contours in _pixel_space_.
+    ###     for c in cnts:
+    ###         try:
+    ###             M = cv2.moments(c)
+    ###             cX = int(M["m10"] / M["m00"])
+    ###             cY = int(M["m01"] / M["m00"])
+    ###             # Enforce it to be within bounding box.
+    ###             if (xx < cX < xx+ww) and (yy < cY < yy+hh):
+    ###                 contained_cnts.append(c)
+    ###         except:
+    ###             pass
+
+    ###     # Go from `contained_cnts` to a target contour and process it. And to be clear, 
+    ###     # we're only using the LARGEST contour, which SHOULD be the colored tape!
+    ###     if len(contained_cnts) > 0:
+    ###         target_contour = sorted(contained_cnts, key=cv2.contourArea, reverse=True)[0] # Index 0
+    ###         try:
+    ###             M = cv2.moments(target_contour)
+    ###             cX = int(M["m10"] / M["m00"])
+    ###             cY = int(M["m01"] / M["m00"])
+    ###             peri = cv2.arcLength(target_contour, True)
+    ###             approx = cv2.approxPolyDP(target_contour, 0.02*peri, True)
+
+    ###             # Draw them on the `image_bgr` to return, for visualization purposes.
+    ###             cv2.circle(image_bgr, (cX,cY), 50, (0,0,255))
+    ###             cv2.drawContours(image_bgr, [approx], -1, (0,255,0), 3)
+    ###             cv2.putText(img=image_bgr, 
+    ###                         text="{},{}".format(cX,cY), 
+    ###                         org=(cX+10,cY+10), 
+    ###                         fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+    ###                         fontScale=1, 
+    ###                         color=(255,255,255), 
+    ###                         thickness=2)
+    ###         except:
+    ###             pass
+    ###         return image_bgr, (cX,cY)
+
+    ###     else:
+    ###         # Failed to find _any_ contour.
+    ###         return image_bgr, (-1,-1) 
+
+
