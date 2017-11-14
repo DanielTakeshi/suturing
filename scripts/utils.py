@@ -32,21 +32,6 @@ ESC_KEYS     = [27, 1048603]
 ##     return [xx, yy, zz] 
 
 
-## def home(arm1=None, arm2=None, rot1=None, rot2=None):
-##     """ No more `arm.home()` calls!!! Handles both arms simultaneously. """
-##     assert (arm1 is not None) or (arm2 is not None), "Error, both arms are none"
-##     rot = None
-##     rot = None
-##     if rot is not None:
-##         rot = None
-##         rot = None
-##     #move(arm1, pos=[0.00, 0.06, -0.15], rot=rot, SPEED_CLASS='Fast')
-##     #move(arm2, pos=[0.00, 0.06, -0.15], rot=rot, SPEED_CLASS='Fast')
-##     #else:
-##     #    move(arm1, pos=[0.00, 0.06, -0.15], rot=[0,10,-165], SPEED_CLASS='Fast')
-##     #    move(arm2, pos=[0.00, 0.06, -0.15], rot=[0,10,-165], SPEED_CLASS='Fast')
-
-
 def init(sleep_time=0):
     """ This is often used in the start of every script. """
     d = DataCollector()
@@ -156,7 +141,6 @@ def call_wait_key(nothing=None, exit=True):
     in some cases I want the program to continue and the ESC was just to get it
     to exit a loop. In that case, set `exit=False`.
     """
-    ESC_KEYS = [27, 1048603]
     key = cv2.waitKey(0)
     if key in ESC_KEYS:
         if exit:

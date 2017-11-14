@@ -1,6 +1,10 @@
+# Added by Daniel
 *.swp
 *.swo
 tmp/
+images/
+traj_collector/
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

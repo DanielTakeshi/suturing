@@ -10,6 +10,9 @@ lot.
 This code saves as we go, not at the end, so that it's robust to cases when the
 dVRK might fail (e.g. that MTM reading error we've been seeing a lot lately).
 
+NOTE: when running this for real, be sure to feed (i.e. `tee`) the output into a
+file for my own future reference, or have this code write to a file.
+
 (c) 2017/2018 by Daniel Seita
 """
 
@@ -404,10 +407,6 @@ def collect_guidelines(args, arm, d):
 
 
 if __name__ == "__main__": 
-    """ 
-    When running this for real, be sure to feed (i.e. `tee`) the output into a
-    file for my own future reference, or have this code write to a file.
-    """
     pp = argparse.ArgumentParser()
     pp.add_argument('--stage', type=int, help='Must be 0, 1 or 2.')
     pp.add_argument('--directory', type=str, default='traj_collector/guidelines.p')
