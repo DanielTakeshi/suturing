@@ -4,6 +4,7 @@
 tmp/
 images/
 traj_collector/
+record_master/data/
 
 
 # Byte-compiled / optimized / DLL files

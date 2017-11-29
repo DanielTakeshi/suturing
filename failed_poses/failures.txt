@@ -1,0 +1,39 @@
+Try to put something here. Maybe I will see a pattern about failure cases from the dvrk.
+
+Using:
+
+    ylim = 40
+    plim = 20
+    rlim = 30
+    all_ratio = 0.66
+
+    info['min_yaw']   = 30
+    info['max_yaw']   = 150
+    info['min_pitch'] = 40
+    info['max_pitch'] = 80
+    info['min_pos_roll'] =  40
+    info['max_pos_roll'] = 180
+
+Unless otherwise specified.
+
+--------------------------------------------------------------------------------
+
+Failure case 1. This one didn't apply an `all_ratio` condition.
+
+interval 81 of 327, mid_pose: [( 0.040,  0.045, -0.075),(yaw:86.8, pitch:76.2, roll:127.8)]
+    total rejected sampled rot: 1
+    rot 1, _final_ target rot:  ['39.99', '49.49', '95.52']
+    rot 1, actual pose: [( 0.039,  0.045, -0.074),(yaw:45.7, pitch:64.7, roll:62.2)]
+    total rejected sampled rot: 4
+    rot 2, _final_ target rot:  ['79.14', '45.98', '57.77']
+Killed
+
+
+Failure case 2.
+
+interval 241 of 493, mid_pose: [( 0.054,  0.041, -0.073),(yaw:63.2, pitch:60.7, roll:70.8)]
+    total rejected sampled rot: 2
+    rot 1, _final_ target rot:  ['32.48', '53.53', '69.91']
+    rot 1, actual pose: [( 0.055,  0.041, -0.073),(yaw:45.3, pitch:58.6, roll:58.6)]
+    total rejected sampled rot: 14
+    rot 2, _final_ target rot:  ['78.21', '63.33', '54.64']

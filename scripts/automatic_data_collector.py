@@ -52,6 +52,7 @@ class AutoDataCollector:
         self.num_trajs = args['num_trajs']
         self.rots_per_stoppage = args['rots_per_stoppage']
         self.interpolation_interval = args['interpolation_interval']
+        self.require_positive_roll = args['require_positive_roll']
         self.require_negative_roll = args['require_negative_roll']
 
         self.info = pickle.load( open(args['guidelines_dir'], 'r') )
@@ -117,10 +118,10 @@ class AutoDataCollector:
 
     def _sample_roll(self, old_roll=None):
         """ Samples a valid roll, & handle roll being negative. """
-        if self.require_negative_roll:
-            # I don't think we should be here.
-            raise ValueError("shouldn't be in negative roll case")
-            roll = np.random.uniform(low=self.info['min_roll'], high=self.info['max_roll']) 
+        if self.require_positive_roll:
+            roll = np.random.uniform(low=self.info['min_pos_roll'], high=self.info['max_pos_roll']) 
+        elif self.require_negative_roll:
+            roll = np.random.uniform(low=self.info['min_neg_roll'], high=self.info['max_neg_roll'])
         else:
             roll = np.random.uniform(low=-180, high=180) 
             while (self.info['roll_neg_ubound'] < roll < self.info['roll_pos_lbound']):
@@ -133,13 +134,16 @@ class AutoDataCollector:
         Need to tune these limit ranges!! Sample rotation repeatedly until all
         the safety checks pass.
         """
-        ylim = 90
+        ylim = 40
         plim = 20
-        rlim = 20
+        rlim = 30
+        all_ratio = 0.66
 
         prev_roll = prev_rot[2]
-        if prev_roll < 0:
-            prev_roll += 360.
+        if (not self.require_positive_roll) and (not self.require_negative_roll):
+            if prev_roll < 0:
+                prev_roll += 360.
+        total_rejected = 0
 
         while True:
             possible_rot = [self._sample_yaw(), self._sample_pitch(), self._sample_roll()]
@@ -150,21 +154,29 @@ class AutoDataCollector:
             # really close by 10 degrees. If current is -140, should be farther
             # ... which it is as 360-140=220, so the gap is 50 degrees.
             # ------------------------------------------------------------------
-            curr_roll = possible_rot[0]
-            if curr_roll < 0:
-                curr_roll += 360.
+            curr_roll = possible_rot[2]
+            if (not self.require_positive_roll) and (not self.require_negative_roll):
+                if curr_roll < 0:
+                    curr_roll += 360.
 
-            y_cond = abs(possible_rot[0] - prev_rot[0]) < ylim
-            p_cond = abs(possible_rot[1] - prev_rot[1]) < plim
-            r_cond = abs(prev_roll - curr_roll) < rlim
+            y_diff = abs(possible_rot[0] - prev_rot[0])
+            p_diff = abs(possible_rot[1] - prev_rot[1])
+            r_diff = abs(prev_roll - curr_roll)
+            y_cond = y_diff < ylim
+            p_cond = p_diff < plim
+            r_cond = r_diff < rlim
+            all_cond = (y_diff + p_diff + r_diff) < (ylim + plim + rlim) * all_ratio
 
             if y_cond and p_cond and r_cond:
                 break
             else:
                 random_rotation_str = ["%.2f" % v for v in possible_rot]
-                print("    _not_ accepting rot:  {} due to y,p,r={},{},{}".format(
-                    random_rotation_str, y_cond, p_cond, r_cond))
+                #print("    prev, curr rolls: {} and {}".format(prev_roll, curr_roll))
+                #print("    _not_ accepting sampled rot:  {} due to y,p,r={},{},{}".format(
+                #    random_rotation_str, y_cond, p_cond, r_cond))
+                total_rejected += 1
  
+        print("    total rejected sampled rot: {}".format(total_rejected))
         return possible_rot
 
 
@@ -199,7 +211,8 @@ class AutoDataCollector:
         home_pos = self.info['pos_'+self.orien[index]]
         home_rot = self.info['rot_'+self.orien[index]]
         U.move(self.arm, home_pos, home_rot)
-        better_rotation = [self._sample_yaw(), self._sample_pitch(), self._sample_roll()]
+        #better_rotation = [self._sample_yaw(), self._sample_pitch(), self._sample_roll()]
+        better_rotation = self._sample_safe_rotation(home_rot)
         U.move(self.arm, home_pos, better_rotation)
 
 
@@ -327,17 +340,18 @@ def collect_guidelines(args, arm, d):
     """
     # Add stuff we should already know, particularly the rotation ranges.
     info = {}
-    info['min_yaw']   = -90
-    info['max_yaw']   =  90
-    info['min_pitch'] = -40
-    info['max_pitch'] =  40
+    info['min_yaw']   = 30
+    info['max_yaw']   = 150
+    info['min_pitch'] = 40
+    info['max_pitch'] = 80
 
-    # TODO (11/10/17) I'm not totally sure these values are good for our task
-    # --- will have to tune these! 
+    # Roll is annoying because of the values the dVRK provides.
     info['roll_neg_ubound'] = -140 # (-180, roll_neg_ubound)
     info['roll_pos_lbound'] =  140 # (roll_pos_lbound, 180)
-    info['min_roll'] = -180
-    info['max_roll'] = -150
+    info['min_pos_roll'] =  40
+    info['max_pos_roll'] = 180
+    info['min_neg_roll'] = -180
+    info['max_neg_roll'] = -150
 
     # Move arm to positions to determine approximately safe ranges for x,y,z
     # values. All the `pos_{lr,ll,ul,ur}` are in robot coordinates.
@@ -426,8 +440,9 @@ if __name__ == "__main__":
         adc_args = {}
         adc_args['d'] = d
         adc_args['arm'] = arm1
-        adc_args['z_offset'] = 0.005 # TODO is this needed?
-        adc_args['require_negative_roll'] = False # TODO I _think_ `False` is what we need
+        adc_args['z_offset'] = 0.010 # TODO is this needed?
+        adc_args['require_positive_roll'] = True  # TODO double check
+        adc_args['require_negative_roll'] = False # TODO double check
         adc_args['num_trajs'] = args.num_trajs
         adc_args['rots_per_stoppage'] = args.rots_per_stoppage
         adc_args['guidelines_dir'] = args.directory
@@ -439,170 +454,3 @@ if __name__ == "__main__":
         # Perform data cleaning
         print("Stage 2, data cleaning on the data.")
         print("TODO: not implemented yet.")
-
-
-### def is_this_clean(val, theta_l2r, tolerance=11.38):
-###     """ 
-###     Note: I return the distance as the second tuple element, or -1 if irrelevant. 
-###     """
-###     frame, l_center, r_center = val
-###     if (l_center == (-1,-1) or r_center == (-1,-1)):
-###         return False, -1
-###     left_pt_hom = np.array([l_center[0], l_center[1], 1])
-###     right_pt = left_pt_hom.dot(theta_l2r)
-###     dist = np.sqrt( (r_center[0]-right_pt[0])**2 + (r_center[1]-right_pt[1])**2 )
-###     if dist >= tolerance:
-###         return False, dist
-###     return True, dist
-### 
-### 
-### def filter_points_in_results(camera_map, directory, do_print=False, num_skip=1):
-###     """ Iterate through all trajectories to concatenate the data.
-### 
-###     Stuff to filter:
-### 
-###     (1) Both a left and a right camera must actually exist. In my code I set invalid
-###         ones to have (-1,-1) so that's one case.
-### 
-###     (2) Another case would be if the left-right transformation doesn't look good. Do
-###         this from the perspective of the _left_ camera since it's usually better. In
-###         other words, given pixels from the left camera, if we map them over to the
-###         right camera, the right camera's pixels should be roughly where we expect. If
-###         it's completely off, something's wrong. Use `camera_map` for this! I use a 
-###         distance of 12 for this, since that's about a 1mm difference in the workspace.
-### 
-###     The result is one list of all the cleaned up data. Each element in the list should
-###     consist of a tuple of `(frame,l_center,r_center)` where `frame` is really the pose.
-###     """
-###     clean_data = []
-###     traj_dirs = sorted([dd for dd in os.listdir(directory) if 'traj_' in dd])
-###     print("len(traj_dirs): {}".format(traj_dirs))
-###     total = 0
-### 
-###     for td in traj_dirs:
-###         traj_data = pickle.load(open(directory+td+'/traj_poses_list.p', 'r'))
-###         assert (len(traj_data) > 1) and (len(traj_data[0]) == 3) and (len(traj_data) % 4 == 0)
-###         num_td = 0
-###         # Updated `September 10, 2017` so that I can see the percentage w/out the "extra rotation."
-###         # traj_data = traj_data[::num_skip] 
-###         traj_data = [val for i,val in enumerate(traj_data) if i%4 != 0]
-###         
-###         for (i, val) in enumerate(traj_data):
-###             total += 1
-###             isclean, dist = is_this_clean(val, camera_map)
-###             if isclean:
-###                 if do_print:
-###                     print("{}  CLEAN : {} (dist {})".format(str(i).zfill(3), val, dist)) # Clean
-###                 clean_data.append(val)
-###                 num_td += 1
-###             else:
-###                 if do_print:
-###                     print("{}        : {} (dist {})".format(str(i).zfill(3), val, dist)) # Dirty
-### 
-###         print("dir {}, len(raw_data) {}, len(clean_data) {}\n".format(td, len(traj_data), num_td))
-### 
-###     print("\nNow returning clean data w/{} elements".format(len(clean_data)))
-###     print("{} total points, i.e. a clean rate of {:.4f}".format(total, len(clean_data)/float(total)))
-###     return clean_data
-### 
-### 
-### def process_data(clean_data):
-###     """ Processes the filtered, cleaned data into something I can use in my old code.
-### 
-###     I generated my original calibration data from `scripts/calibrate_onearm.py`. This gets
-###     passed to `scripts/mapping.py`. Thus, just make the data here as I did in the former
-###     script. This means having TWO LISTS (remember, I used one list even though the code
-###     doesn't save it that way ... confusing, I know), with elements (pos, rot, cX, cY), ONE
-###     PER CAMERA. Yes, make two separate lists.
-###     """
-###     l_list = []
-###     r_list = []
-###     for i,val in enumerate(clean_data):
-###         frame, l_center, r_center = val
-###         pos, rot = utils.lists_of_pos_rot_from_frame(frame)
-###         l_list.append( (pos, rot, l_center[0], l_center[1]) )
-###         r_list.append( (pos, rot, r_center[0], r_center[1]) )
-###     return l_list, r_list
-### 
-### 
-### if __name__ == "__main__":
-###     """
-###     First, load in the parameters file, only for getting the left to right camera
-###     pixel correspondence. It's OK to use version 00 for this since these points should
-###     not change among different versions, since it's just matching circle centers.
-### 
-###     Then, clean up the data using various heuristics (see the method documentation for
-###     details). Then process it into a form that I need, and save it.
-###     """
-###     params = pickle.load(open('config/mapping_results/manual_params_matrices_v02.p', 'r'))
-###     directory = 'traj_collector/'
-### 
-###     clean_data = filter_points_in_results(params['theta_l2r'], directory, do_print=False)
-###     #proc_left, proc_right = process_data(clean_data)
-###     #pickle.dump(proc_left,  open('config/grid_auto/auto_calib_left_00.p', 'w'))
-###     #pickle.dump(proc_right, open('config/grid_auto/auto_calib_right_00.p', 'w'))
-
-
-    ### def _get_contour(self, image, left):
-    ###     """ 
-    ###     Given `image` in HSV format, get the contour center. This is the WRIST position
-    ###     of the robot w.r.t. camera pixels, as the end-effector is hard to work with.
-    ###     AND return the center of the contour!
-    ###     """
-    ###     image = cv2.cvtColor(image, cv2.COLOR_HSV2BGR) 
-    ###     image_bgr = image.copy()
-
-    ###     # Detect contours *inside* the bounding box (a heuristic).
-    ###     if left:
-    ###         xx, yy, ww, hh = self.d.get_left_bounds()
-    ###     else:
-    ###         xx, yy, ww, hh = self.d.get_right_bounds()
-
-    ###     # Note that contour detection requires a single channel image.
-    ###     (cnts, _) = cv2.findContours(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), 
-    ###                                  cv2.RETR_TREE, 
-    ###                                  cv2.CHAIN_APPROX_SIMPLE)
-    ###     contained_cnts = []
-
-    ###     # Find the centroids of the contours in _pixel_space_.
-    ###     for c in cnts:
-    ###         try:
-    ###             M = cv2.moments(c)
-    ###             cX = int(M["m10"] / M["m00"])
-    ###             cY = int(M["m01"] / M["m00"])
-    ###             # Enforce it to be within bounding box.
-    ###             if (xx < cX < xx+ww) and (yy < cY < yy+hh):
-    ###                 contained_cnts.append(c)
-    ###         except:
-    ###             pass
-
-    ###     # Go from `contained_cnts` to a target contour and process it. And to be clear, 
-    ###     # we're only using the LARGEST contour, which SHOULD be the colored tape!
-    ###     if len(contained_cnts) > 0:
-    ###         target_contour = sorted(contained_cnts, key=cv2.contourArea, reverse=True)[0] # Index 0
-    ###         try:
-    ###             M = cv2.moments(target_contour)
-    ###             cX = int(M["m10"] / M["m00"])
-    ###             cY = int(M["m01"] / M["m00"])
-    ###             peri = cv2.arcLength(target_contour, True)
-    ###             approx = cv2.approxPolyDP(target_contour, 0.02*peri, True)
-
-    ###             # Draw them on the `image_bgr` to return, for visualization purposes.
-    ###             cv2.circle(image_bgr, (cX,cY), 50, (0,0,255))
-    ###             cv2.drawContours(image_bgr, [approx], -1, (0,255,0), 3)
-    ###             cv2.putText(img=image_bgr, 
-    ###                         text="{},{}".format(cX,cY), 
-    ###                         org=(cX+10,cY+10), 
-    ###                         fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-    ###                         fontScale=1, 
-    ###                         color=(255,255,255), 
-    ###                         thickness=2)
-    ###         except:
-    ###             pass
-    ###         return image_bgr, (cX,cY)
-
-    ###     else:
-    ###         # Failed to find _any_ contour.
-    ###         return image_bgr, (-1,-1) 
-
-

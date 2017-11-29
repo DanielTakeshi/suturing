@@ -18,8 +18,9 @@ np.set_printoptions(suppress=True)
 # ------------
 
 ESC_KEYS     = [27, 1048603]
-C_LEFT_INFO  = pickle.load(open('config/camera_info_matrices/left.p',  'r'))
-C_RIGHT_INFO = pickle.load(open('config/camera_info_matrices/right.p', 'r'))
+camerainfo_p = '/home/davinci0/danielseita/suturing/config/camera_info_matrices/'
+C_LEFT_INFO  = pickle.load(open(camerainfo_p+'left.p',  'r'))
+C_RIGHT_INFO = pickle.load(open(camerainfo_p+'right.p', 'r'))
 STEREO_MODEL = image_geometry.StereoCameraModel()
 STEREO_MODEL.fromCameraInfo(C_LEFT_INFO, C_RIGHT_INFO)
 
@@ -87,7 +88,10 @@ def pos_rot_cpos(cpos, nparrays=False):
 
 
 def pos_rot_arm(arm, nparrays=False):
-    """ Since I don't want to keep tying the get_current_car ... """
+    """ 
+    Since I don't want to keep tying the get_current_car ...  Also, using the
+    nparrays means printing is typically easier, with fewer decimal places.
+    """
     return pos_rot_cpos(arm.get_current_cartesian_position(), nparrays)
 
 
