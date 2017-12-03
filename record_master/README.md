@@ -70,3 +70,7 @@ a checklist for that.
 
 Then, repeat the above for additional trajectories! Once I have a dataset, I can
 then do a bunch of other stuff ...
+
+**Note**: some data cleaning may be needed since I see images that are
+duplicates of each other ... but that can be handled at a later stage by
+checking with `np.allclose`.

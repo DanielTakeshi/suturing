@@ -114,7 +114,7 @@ def start_listening(exit):
         pos1, rot1 = U.pos_rot_cpos(pose1)
         joint1 = psm1.get_current_joint_position()
         grip1 = [joint1[-1] * 180 / np.pi]
-        print(current_t, pose1, t)
+        print(current_t, pose1, count)
 
         if USE_PSM2:
             pose2 = psm2.get_current_cartesian_position()
