@@ -1,60 +1,64 @@
 # Demo Recording from Master
 
-Here's how this should work.
+First, make sure the setup is correct, before we begin collecting data. Second,
+each time I run the demo recording code, it will record ONE trajectory. There's
+a checklist for that.
 
-**Setup checklist** (make sure I read this each time!!):
 
-- Put two layers of the same green foam (with the X mark), put in same setup.
-  Make sure they have rails so that they won't leave the setup (as the gripper
-  can grip them as well ...). Maybe tape is better? And put tape in between the
-  two foams.
+## Setup
 
-- Put same needle (with the wire glued on it) in "roughly" the same location. I
-  think we want some similar stuff but some diversity is good. The location will
-  need to be tuned a bit because not all initial configurations can lead to it
-  reaching the target position.
+- Put three pieces of green foam on top of each other and put tape on them so
+  they don't move up (well, usually...) when the gripper also grips the foam
+  with the needle.
 
-- The location should be such that no further downward movement is needed to
-  grip the needle.
+- Put the green foams inside pins screwed down on the workspace.
 
-- Speaking of the target, we're going to need that in the target image, so that
-  I (the human) can see what the objective is going to be. So ... I'll have to
-  figure that out somehow. The issue is that that's going to be in the images,
-  so we'll have to ensure that the behavioral cloning doesn't try and track
-  that.
+- For simplicity, do not even put a gripper in the PSM2. This frees my left hand
+  to help manipulate the PSM1 when using the master tools.
 
-- **TODO** paint the needles in some way. I know we'll have to do some image
-  processing, however we should definitely be saving the raw images. The
-  needles, I think, should be painted yellow uniformly, but then have some color
-  for the tip and some other color for the other end? That way I can do the
-  processing that I wanted, but also perhaps we can extract an image of the full
-  needle.
 
-Record the above with camera images and ensure that it remains consistent. 
+## Demo Recording (One Trajectory)
 
-**Usage**:
+**Read this each time!!**
 
-- Run the demo collection python command. A pop-up window appears.
+- With the PSM1 in a place where it's not gripping a needle or touching the
+  foam, click "home" in the teleop so that it "resets" to a good position.
 
-- Before clicking start, use the master clutch so that the arms are in a
-  reasonable spot. This is to prevent any clutches while we're in progress.
+- Put the needle in a place that corresponds roughly to the center of the
+  endoscope cameras and in a place where it can see clearly.
 
-- Try to smoothly adjust the dvrk so that it smoothly reaches its target. Easier
-  said than done, I know ... **TODO need to train and get camera set up**.
+- Put the PSM1 gripper (with SNAP) so that it only has to grip the needle.
 
-- Double check images immediately after each trajectory. Delete the directory if
-  there was a failure.
+- Click "teleop". Check that there are no warnings with the joint angles. If
+  there are, restart the process.
 
-- **TODO**: don't save the first and last 5 since those are typically nothing
-  due to lag between when we start and finish ... 
+- Now run the script `demo_recording.py`. A pop-up window appears. Click start.
 
-**Later**:
+- Move the master tools. :-)
 
-- With this data, we have `(images,position)` and will (a) process images in
-  some unforseen way, and (b) the action should be the position delta,
-  `pos_{t+1}-pos_{t}` right? That way we can take that and add it to the current
-  position in practice.
+- When I'm done, click stop and wait a few minutes for it to save the data. OR
+  if I know the trajectory was a failure, just kill the program and delete the
+  `demo_XYZ` directory.
 
-- **TODO** once I practice, hopefully the needles start going in the right spot.
-  Then we practice on the real surgical phantom, but with the **same** painting
-  setup for the needles.
+- Next, inside each of the `demo_XYZ` directories, in a file called `limits.txt`
+  (and please use the exact name here) put in TWO numbers. The first is the time
+  step at which we should begin considering the data. The second is the time
+  step at which we should stop considering the data. This way, we ignore the
+  first N images of no activity and the last M images of no activity. Put these
+  as separate lines. That is, the entire `limits.txt` file should look like
+  this:
+
+  ```
+  5
+  18
+  ```
+
+  if, for instance, 5 and 18 are the appropriate values. These should be
+  *inclusive* for both. There might be a way to do this automatically but we
+  should always be checking the data anyway.
+
+- Finally, use the hand clutch to release the needle and move the gripper to a
+  good spot, and click "home".
+
+Then, repeat the above for additional trajectories! Once I have a dataset, I can
+then do a bunch of other stuff ...

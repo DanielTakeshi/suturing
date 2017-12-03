@@ -17,6 +17,10 @@ from autolab.data_collector import DataCollector
 from collections import defaultdict
 from scripts import utils as U
 
+# Check these ... fine tune the interval.
+USE_PSM2 = False
+INTERVAL = 0.5 
+
 
 def startCallback():
     """
@@ -58,11 +62,14 @@ def exitCallback():
         record_process.terminate()
         record_process.join()
     top.destroy()
-    
-    if f1 != None and f2 !=None:
-        f1.close()
-        f2.close()
-    
+   
+    if USE_PSM2:
+        if f1 != None and f2 !=None:
+            f1.close()
+            f2.close()
+    else:
+        if f1 != None:
+            f1.close()
     raise SystemExit()
 
 
@@ -72,11 +79,9 @@ def start_listening(exit):
     Save the trajectory at the end, since saving the images as we go is very
     costly. Images are extracted from the autolab data collector.
 
-    The `interval` here is important: determines how precise we want to be with
-    timing. I think 1 second is an upper bound, maybe 0.5 is good.
+    The `INTERVAL` variable is important: determines how precise we want to be
+    with timing. I think 1 second is an upper bound, maybe 0.5 is good.
     """
-    interval = 0.5 # Fine-tune this quantity.
-
     pos1, pos2 = None, None
     grip1, grip2 = None, None
     directory = E.get()
@@ -87,7 +92,8 @@ def start_listening(exit):
 
     d = DataCollector()
     psm1 = robot("PSM1")
-    psm2 = robot("PSM2")
+    if USE_PSM2:
+        psm2 = robot("PSM2")
     time.sleep(1)
     count = 0
     start_t = time.time()
@@ -103,26 +109,31 @@ def start_listening(exit):
         current_t = (time.time() - start_t)
 
         pose1 = psm1.get_current_cartesian_position()
-        pose2 = psm2.get_current_cartesian_position()
-        print(current_t, pose1)
         pos1, rot1 = U.pos_rot_cpos(pose1)
-        pos2, rot2 = U.pos_rot_cpos(pose2)
         joint1 = psm1.get_current_joint_position()
-        joint2 = psm2.get_current_joint_position()
         grip1 = [joint1[-1] * 180 / np.pi]
-        grip2 = [joint2[-1] * 180 / np.pi]
+        print(current_t, pose1)
+
+        if USE_PSM2:
+            pose2 = psm2.get_current_cartesian_position()
+            pos2, rot2 = U.pos_rot_cpos(pose2)
+            joint2 = psm2.get_current_joint_position()
+            grip2 = [joint2[-1] * 180 / np.pi]
 
         stats['time_ros'].append(t)
         stats['time_secs'].append(current_t)
         stats['pos_rot_1'].append( pos1+rot1 )
-        stats['pos_rot_2'].append( pos2+rot2 )
         stats['g_joint_1'].append( list(grip1)+list(joint1) )
-        stats['g_joint_2'].append( list(grip2)+list(joint2) )
+
+        if USE_PSM2:
+            stats['pos_rot_2'].append( pos2+rot2 )
+            stats['g_joint_2'].append( list(grip2)+list(joint2) )
+
         im_left_raw.append(d.left['raw'])
         im_right_raw.append(d.right['raw'])
 
         count += 1
-        time.sleep(interval)
+        time.sleep(INTERVAL)
 
     limit = 1000 
     if count > limit:
@@ -144,6 +155,7 @@ def start_listening(exit):
 if __name__ == '__main__':
     # f1 and f2 are the file objects for saving left/right poses.
     # record_process records the positions of the robot.
+
     exit = multiprocessing.Event()
     f1, f2 = None, None
     record_process = None

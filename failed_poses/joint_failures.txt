@@ -1,0 +1,94 @@
+Joint failures. These are hugely problematic.
+Oh BTW it sometimes switches order of left/right when printing.
+
+
+----------------------------------------------------------------------------------------------------
+Warning 1. Right from the start.
+
+-W Class mtsPID: MTML-PID: joint limit, mask (1 for limit):            0            1            0            0            0            0            0            0, 
+ requested:        0.403709    -0.309435    0.0532377     0.260605      1.84744    0.0828979    -0.100662      0.00000, 
+ lower limits:    -0.698132    -0.261799    -0.872665     -3.49066     -1.57080    -0.785398     -8.37758      0.00000, 
+ upper limits:      1.13446     0.872665     0.610865      1.57080      3.14159     0.785398      7.85398     0.523599
+
+-W Class mtsPID: MTMR-PID: joint limit, mask (1 for limit):            0            1            0            0            0            0            0            0, 
+ requested:        0.192701    -0.315041     0.142971    -0.400957      2.25601    -0.260536      3.27447      0.00000, 
+ lower limits:     -1.13446    -0.261799    -0.872665     -1.57080     -1.57080    -0.785398     -8.37758      0.00000, 
+ upper limits:     0.698132     0.872665     0.610865      3.49066      3.14159     0.785398      7.85398     0.523599
+
+Warning 2. 
+It should be EXACTLY in the same position as what I did in Warning 1. So it's not deterministic.
+I.e., I'm doing Idle -> Home -> Idle -> Home -> Idle etc... without changing the positions at all!!
+
+-W Class mtsPID: MTML-PID: joint limit, mask (1 for limit):            0            1            0            0            0            0            0            0, 
+ requested:        0.429918    -0.314033    0.0597552     0.261014      1.85040    0.0917798    -0.100662      0.00000, 
+ lower limits:    -0.698132    -0.261799    -0.872665     -3.49066     -1.57080    -0.785398     -8.37758      0.00000, 
+ upper limits:      1.13446     0.872665     0.610865      1.57080      3.14159     0.785398      7.85398     0.523599
+
+-W Class mtsPID: MTMR-PID: joint limit, mask (1 for limit):            0            1            0            0            0            0            0            0, 
+ requested:        0.205062    -0.314663     0.143935    -0.402348      2.26489    -0.269418      3.28039      0.00000, 
+ lower limits:     -1.13446    -0.261799    -0.872665     -1.57080     -1.57080    -0.785398     -8.37758      0.00000, 
+ upper limits:     0.698132     0.872665     0.610865      3.49066      3.14159     0.785398      7.85398     0.523599
+
+Warning 3.
+
+-W Class mtsPID: MTML-PID: joint limit, mask (1 for limit):            0            1            0            0            0            0            0            0, 
+ requested:        0.425731    -0.311577    0.0570622     0.260878      1.84744    0.0858585   -0.0592128      0.00000, 
+ lower limits:    -0.698132    -0.261799    -0.872665     -3.49066     -1.57080    -0.785398     -8.37758      0.00000, 
+ upper limits:      1.13446     0.872665     0.610865      1.57080      3.14159     0.785398      7.85398     0.523599
+
+-W Class mtsPID: MTMR-PID: joint limit, mask (1 for limit):            0            1            0            0            0            0            0            0, 
+ requested:        0.208258    -0.315765     0.142723    -0.404669      2.26489    -0.269418      3.27447      0.00000, 
+ lower limits:     -1.13446    -0.261799    -0.872665     -1.57080     -1.57080    -0.785398     -8.37758      0.00000, 
+ upper limits:     0.698132     0.872665     0.610865      3.49066      3.14159     0.785398      7.85398     0.523599
+
+Warning 4. This time after clutching but NOT in teleop mode.
+
+-W Class mtsPID: MTML-PID: joint limit, mask (1 for limit):            0            1            0            0            0            0            0            0, 
+ requested:        0.327362    -0.293910    0.0388695     0.242332      1.83560    0.0740160     -1.16057      0.00000, 
+ lower limits:    -0.698132    -0.261799    -0.872665     -3.49066     -1.57080    -0.785398     -8.37758      0.00000, 
+ upper limits:      1.13446     0.872665     0.610865      1.57080      3.14159     0.785398      7.85398     0.523599
+
+-W Class mtsPID: MTMR-PID: joint limit, mask (1 for limit):            0            1            0            0            0            0            0            0, 
+ requested:        0.213683    -0.315041     0.144207    -0.485471      2.26785    -0.296064      2.69418      0.00000, 
+ lower limits:     -1.13446    -0.261799    -0.872665     -1.57080     -1.57080    -0.785398     -8.37758      0.00000, 
+ upper limits:     0.698132     0.872665     0.610865      3.49066      3.14159     0.785398      7.85398     0.523599
+
+Warning 5. 
+I went to teleop, clutched, moved around a bit, then back to home -> idle -> home and requested position. Still not working.
+
+-W Class mtsPID: MTML-PID: joint limit, mask (1 for limit):            0            1            0            0            0            0            0            0, 
+ requested:        0.408341    -0.305405    0.0483652     0.225829      1.85632    0.0562521   -0.0947404      0.00000, 
+ lower limits:    -0.698132    -0.261799    -0.872665     -3.49066     -1.57080    -0.785398     -8.37758      0.00000, 
+ upper limits:      1.13446     0.872665     0.610865      1.57080      3.14159     0.785398      7.85398     0.523599
+
+-W Class mtsPID: MTMR-PID: joint limit, mask (1 for limit):            0            1            0            0            0            0            0            0, 
+ requested:        0.224211    -0.314663     0.144092    -0.419758      2.27969    -0.275339      3.28039      0.00000, 
+ lower limits:     -1.13446    -0.261799    -0.872665     -1.57080     -1.57080    -0.785398     -8.37758      0.00000, 
+ upper limits:     0.698132     0.872665     0.610865      3.49066      3.14159     0.785398      7.85398     0.523599
+
+FAILURE. I tried to move now. And got this.
+
+[ INFO] [1512175630.066800481]: cisst-ros: MTMR-PSM1: master clutch released
+[ INFO] [1512175630.066873583]: cisst-ros: MTMR position cartesian
+[ INFO] [1512175630.086836859]: cisst-ros: MTML-PSM2: master clutch released
+[ INFO] [1512175630.086885287]: cisst-ros: MTML position cartesian
+[ INFO] [1512175632.714634188]: cisst-ros: MTML-PSM2: operator present
+[ INFO] [1512175632.714763753]: cisst-ros: MTML gravity compensation
+[ INFO] [1512175632.714859608]: cisst-ros: MTMR-PSM1: operator present
+[ INFO] [1512175632.715045304]: cisst-ros: MTMR gravity compensation
+-E Class mtsPID: File: mtsPID.cpp Line: 411 -  PSM2-PID: tracking error, mask (1 for error):            0            0            0            0            1            0            0, 
+errors:         0.057593    -0.106603    0.00609410     0.37768     1.24480     0.389380     0.817054, 
+tolerances:     0.349066     0.349066    0.0100000      2.09440     0.61086     0.610865     1.57080
+[ERROR] [1512175632.734679882]: cisst-ros: MTML-PSM2: received from slave [PSM2: received [PSM2-PID: tracking error, mask (1 for error):            0            0            0            0        1            0            0]]
+[ERROR] [1512175632.734739252]: cisst-ros: PSM2: received [PSM2-PID: tracking error, mask (1 for error):            0            0            0            0            1            0            0]
+
+The funny thing is this isn't even in the kind of position that I want to use ...
+
+Maybe I have to move it using manual clutch rather than foot clutch? (Let's call it these to avoid further confusion.)
+
+
+
+
+
+----------------------------------------------------------------------------------------------------
+
