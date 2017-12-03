@@ -24,13 +24,16 @@ a checklist for that.
 - With the PSM1 in a place where it's not gripping a needle or touching the
   foam, click "home" in the teleop so that it "resets" to a good position.
 
+  **Note**: perhaps this is not needed if there are no errors, and if the master
+  tools can be adjusted using the foot clutch. Basically, if I'm at a good spot
+  and teleop is on and there are no warnings, I hope I will be OK.
+
 - Put the needle in a place that corresponds roughly to the center of the
-  endoscope cameras and in a place where it can see clearly.
+  endoscope cameras and in a place where it can see clearly, and put the PSM1
+  gripper (with SNAP) so that it only has to grip the needle.
 
-- Put the PSM1 gripper (with SNAP) so that it only has to grip the needle.
-
-- Click "teleop". Check that there are no warnings with the joint angles. If
-  there are, restart the process.
+- If necessary, click "teleop". Check that there are no warnings with the joint
+  angles. If there are, restart the process.
 
 - Now run the script `demo_recording.py`. A pop-up window appears. Click start.
 
@@ -59,6 +62,11 @@ a checklist for that.
 
 - Finally, use the hand clutch to release the needle and move the gripper to a
   good spot, and click "home".
+
+  **UPDATE**: actually maybe not ... for now I think I can get away with using
+  the *hand* clutch to move the gripper to where it will be gripping for the
+  next demo, and then using the *foot* clutch to adjust the master tools so that
+  they're not stuck at the top.
 
 Then, repeat the above for additional trajectories! Once I have a dataset, I can
 then do a bunch of other stuff ...

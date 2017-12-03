@@ -17,9 +17,11 @@ from autolab.data_collector import DataCollector
 from collections import defaultdict
 from scripts import utils as U
 
-# Check these ... fine tune the interval.
+# Check these ... fine tune the interval. Using 1.0 seems too coarse, but using
+# 0.33 means I often see images that are exactly the same across different
+# times. Somewhere in between is probably good.
+INTERVAL = 0.5
 USE_PSM2 = False
-INTERVAL = 0.5 
 
 
 def startCallback():
@@ -112,7 +114,7 @@ def start_listening(exit):
         pos1, rot1 = U.pos_rot_cpos(pose1)
         joint1 = psm1.get_current_joint_position()
         grip1 = [joint1[-1] * 180 / np.pi]
-        print(current_t, pose1)
+        print(current_t, pose1, t)
 
         if USE_PSM2:
             pose2 = psm2.get_current_cartesian_position()
@@ -143,12 +145,14 @@ def start_listening(exit):
     print("saving images and stats dict (count: {}), may take a few minutes".format(count))
     num_digits = len(str(abs(count)))
     for c in range(count):
+        if c % 5 == 0:
+            print("saving index {} now ...".format(c))
         idx = str(c).zfill(num_digits)
         left  = directory+ "/left_endoscope/im_raw_left_" +idx+ ".png"
         right = directory+ "/right_endoscope/im_raw_right_" +idx+ ".png"
         scipy.misc.imsave(left,  im_left_raw[c])
         scipy.misc.imsave(right, im_right_raw[c])
-    print("done with saving images")
+    print("DONE with saving images")
     U.store_pickle(fname=directory+"/demo_stats.p", info=stats)
 
 
