@@ -26,7 +26,8 @@ a checklist for that.
 
   **Note**: perhaps this is not needed if there are no errors, and if the master
   tools can be adjusted using the foot clutch. Basically, if I'm at a good spot
-  and teleop is on and there are no warnings, I hope I will be OK.
+  and teleop is on and there are no warnings, I hope I will be OK. Otherwise,
+  use foot clutch to "reset".
 
 - Put the needle in a place that corresponds roughly to the center of the
   endoscope cameras and in a place where it can see clearly, and put the PSM1
@@ -37,7 +38,8 @@ a checklist for that.
 
 - Now run the script `demo_recording.py`. A pop-up window appears. Click start.
 
-- Move the master tools. :-)
+- Move the master tools. :-) BUT MOVE SLOWLY, as the camera images will update
+  only every 0.5 seconds by default.
 
 - When I'm done, click stop and wait a few minutes for it to save the data. OR
   if I know the trajectory was a failure, just kill the program and delete the
@@ -60,6 +62,10 @@ a checklist for that.
   *inclusive* for both. There might be a way to do this automatically but we
   should always be checking the data anyway.
 
+  **Food for thought**: is it actually better to include lots of the images at
+  the end, when it's at the target? How will we be able to terminate the
+  trajectory, after all? And it would be great to see it slow down near the end.
+
 - Finally, use the hand clutch to release the needle and move the gripper to a
   good spot, and click "home".
 
@@ -73,4 +79,4 @@ then do a bunch of other stuff ...
 
 **Note**: some data cleaning may be needed since I see images that are
 duplicates of each other ... but that can be handled at a later stage by
-checking with `np.allclose`.
+checking with `np.allclose`. EDIT: that's because of the subscriber rate.

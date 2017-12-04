@@ -19,8 +19,9 @@ from scripts import utils as U
 
 # Check these ... fine tune the interval. Using 1.0 seems too coarse, but using
 # 0.33 means I often see images that are exactly the same across different
-# times. Somewhere in between is probably good.
-INTERVAL = 0.5
+# times. Somewhere in between is probably good. EDIT: subscriber rate is about
+# 0.5 seconds.
+INTERVAL = 0.75
 USE_PSM2 = False
 
 
