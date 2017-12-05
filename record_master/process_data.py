@@ -10,6 +10,9 @@ import numpy as np
 import os
 import pickle
 import sys
+sys.path.append('../')
+from scripts import utils as U
+np.set_printoptions(suppress=True, edgeitems=10, linewidth=180, precision=5)
 
 
 def process_images(demo):
@@ -51,13 +54,35 @@ def process_images(demo):
     print("Done with image processing.")
 
 
-def process_actions():
+def process_actions(demo):
     """ Get actions.
     
     I think these will be the difference between the pos/rot vectors, but I'll
-    have to see.
+    have to see. Let's test this out before scaling up further.
     """ 
-    pass
+    dpath = 'data/'+demo
+    new_path = dpath+'/left_proc/'
+    assert os.path.exists(new_path) # made in previous method
+    img_names = sorted(os.listdir(new_path))
+
+    # Load limits and stats (which is a _dictionary_).
+    limits = np.loadtxt(dpath+'/limits.txt')
+    assert len(limits) == 2
+    lower, upper = int(limits[0]), int(limits[1])
+    stats = U.load_pickle_to_list(dpath+'/demo_stats.p')
+
+    for idx,img_name in enumerate(img_names):
+        if not (lower <= idx <= upper):
+            continue
+        img = cv2.imread(new_path+img_name)
+        pos_rot = stats['pos_rot_1']
+
+        current    = np.array(pos_rot[idx])
+        subsequent = np.array(pos_rot[idx+1])
+
+        print("\nimg {}".format(new_path+img_name))
+        #print("pos_rot: {}".format(pos_rot[idx]))
+        print("delta: {}".format(subsequent - current))
 
 
 if __name__ == "__main__":
@@ -67,6 +92,6 @@ if __name__ == "__main__":
         assert os.path.exists('data/'+d+'/demo_stats.p')
     print("Processing data based on {} demonstrations.".format(len(dirs)))
 
-    print("debugging only, using first demonstration")
-    process_images(demo=dirs[0])
-    process_actions()
+    print("debugging only, using one demonstration, I'd do a for loop otherwise ...")
+    #process_images(demo=dirs[0])
+    process_actions(demo=dirs[0])
