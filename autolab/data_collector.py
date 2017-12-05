@@ -27,6 +27,9 @@ class DataCollector:
                  camera_info_str='camera_info',
                  camera_im_str='image_rect_color'):
 
+        # Images get saved much faster if this is False.
+        self.preprocess = False
+
         # Left and right images, and processed images.
         self.left = {}
         self.right = {}
@@ -77,24 +80,26 @@ class DataCollector:
         sr = self.right
 
         sr['raw'] = self.bridge.imgmsg_to_cv2(msg, "rgb8")
-        sr['bbox'] = self.make_bounding_box(sr['raw'], x,y,w,h)
-        sr['bin_mask'] = self._binary_mask(sr['raw'])
-        sr['proc_default'] = self._preproc_default(sr['raw'])
-        self.right_contours = self._get_contours(sr['proc_default'])
+        if self.preprocess:
+            sr['bbox'] = self.make_bounding_box(sr['raw'], x,y,w,h)
+            sr['bin_mask'] = self._binary_mask(sr['raw'])
+            sr['proc_default'] = self._preproc_default(sr['raw'])
+            self.right_contours = self._get_contours(sr['proc_default'])
 
 
     def left_image_callback(self, msg):
-        #print("in left_image_callback, time: {}".format(time.time() - self.start_t))
+        print("in left_image_callback, time: {}".format(time.time() - self.start_t))
         if rospy.is_shutdown():
             return
         x,y,w,h = self.lx, self.ly, self.lw, self.lh
         sl = self.left
 
         sl['raw'] = self.bridge.imgmsg_to_cv2(msg, "rgb8")
-        sl['bbox'] = self.make_bounding_box(sl['raw'], x,y,w,h)
-        sl['bin_mask'] = self._binary_mask(sl['raw'])
-        sl['proc_default'] = self._preproc_default(sl['raw'])
-        self.left_contours = self._get_contours(sl['proc_default'])
+        if self.preprocess:
+            sl['bbox'] = self.make_bounding_box(sl['raw'], x,y,w,h)
+            sl['bin_mask'] = self._binary_mask(sl['raw'])
+            sl['proc_default'] = self._preproc_default(sl['raw'])
+            self.left_contours = self._get_contours(sl['proc_default'])
 
     ###########
     # Helpers #

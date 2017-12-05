@@ -21,7 +21,7 @@ from scripts import utils as U
 # 0.33 means I often see images that are exactly the same across different
 # times. Somewhere in between is probably good. EDIT: subscriber rate is about
 # 0.5 seconds.
-INTERVAL = 0.75
+INTERVAL = 0.20
 USE_PSM2 = False
 
 

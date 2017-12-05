@@ -75,8 +75,6 @@ a checklist for that.
   they're not stuck at the top.
 
 Then, repeat the above for additional trajectories! Once I have a dataset, I can
-then do a bunch of other stuff ...
-
-**Note**: some data cleaning may be needed since I see images that are
-duplicates of each other ... but that can be handled at a later stage by
-checking with `np.allclose`. EDIT: that's because of the subscriber rate.
+then do a bunch of other stuff ... if I'm running out of memory, I better use a
+separate thread to process the iamges, but for now I have no difficulties doing
+it "after the fact."
