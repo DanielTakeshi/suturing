@@ -22,7 +22,9 @@ from scripts import utils as U
 # times. Somewhere in between is probably good. EDIT: subscriber rate is about
 # 0.5 seconds.
 INTERVAL = 0.20
+SKIP_FIRST_K = 20
 USE_PSM2 = False
+LIMIT = 1000 
 
 
 def startCallback():
@@ -107,6 +109,14 @@ def start_listening(exit):
     im_right_raw = []
 
     while not exit.is_set():
+
+        # Avoid collecting first K which are just copies of the starting image.
+        # Obviously, sleep at the same interval and increment the count here.
+        if count < SKIP_FIRST_K:
+            count += 1
+            time.sleep(INTERVAL)
+            continue
+
         t = rospy.get_rostime()
         t = t.secs + t.nsecs/1e9
         current_t = (time.time() - start_t)
@@ -115,7 +125,7 @@ def start_listening(exit):
         pos1, rot1 = U.pos_rot_cpos(pose1)
         joint1 = psm1.get_current_joint_position()
         grip1 = [joint1[-1] * 180 / np.pi]
-        print(current_t, pose1, count)
+        print(current_t, pose1, count-SKIP_FIRST_K)
 
         if USE_PSM2:
             pose2 = psm2.get_current_cartesian_position()
@@ -138,14 +148,14 @@ def start_listening(exit):
         count += 1
         time.sleep(INTERVAL)
 
-    limit = 1000 
-    if count > limit:
-        print("count {} > limit {} too much data".format(count, limit))
+    num_data_points = count - SKIP_FIRST_K
+    if num_data_points > LIMIT:
+        print("num_data_points {} > limit {} too much data".format(num_data_points, LIMIT))
         sys.exit()
 
-    print("saving images and stats dict (count: {}), may take a few minutes".format(count))
-    num_digits = len(str(abs(count)))
-    for c in range(count):
+    print("saving {} images, and stats dict), may take a few minutes".format(num_data_points))
+    num_digits = len(str(abs(num_data_points)))
+    for c in range(num_data_points):
         if c % 5 == 0:
             print("saving index {} now ...".format(c))
         idx = str(c).zfill(num_digits)

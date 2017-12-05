@@ -15,21 +15,26 @@ from scripts import utils as U
 np.set_printoptions(suppress=True, edgeitems=10, linewidth=180, precision=5)
 
 
-def process_images(demo):
+def process_images(demo, left):
     """ Processes the raw images.
     
     Techniques: bounding box to crop, and then use Sanjay's image extraction
     stuff. TODO: test this out again once we have better paint for needle
     detection.
     """
-    new_path = 'data/'+demo+'/left_proc/'
+    if left:
+        new_path = 'data/'+demo+'/left_proc/'
+        head ='data/'+demo+'/left_endoscope/'
+    else:
+        new_path = 'data/'+demo+'/right_proc/'
+        head ='data/'+demo+'/right_endoscope/'
+
     if not os.path.exists(new_path):
         os.mkdir(new_path)
-    head ='data/'+demo+'/left_endoscope/'
     img_names = sorted(os.listdir(head))
 
     # Cropping boundaries. Requires some tweaking but I _think_ these work.
-    x,y,w,h = 650, 0, 1024, 1024
+    x,y,w,h = 600, 0, 1024, 1024
 
     for name in img_names:
         img = cv2.imread(head+name)
@@ -72,6 +77,7 @@ def process_actions(demo):
     stats = U.load_pickle_to_list(dpath+'/demo_stats.p')
 
     for idx,img_name in enumerate(img_names):
+        # Check if upper limit is needed. I think the lower one is needed.
         if not (lower <= idx <= upper):
             continue
         img = cv2.imread(new_path+img_name)
@@ -81,7 +87,6 @@ def process_actions(demo):
         subsequent = np.array(pos_rot[idx+1])
 
         print("\nimg {}".format(new_path+img_name))
-        #print("pos_rot: {}".format(pos_rot[idx]))
         print("delta: {}".format(subsequent - current))
 
 
@@ -92,6 +97,8 @@ if __name__ == "__main__":
         assert os.path.exists('data/'+d+'/demo_stats.p')
     print("Processing data based on {} demonstrations.".format(len(dirs)))
 
-    print("debugging only, using one demonstration, I'd do a for loop otherwise ...")
-    #process_images(demo=dirs[0])
-    process_actions(demo=dirs[0])
+    for idx,d in enumerate(dirs):
+        print("\nHere is demo/directory index {}".format(idx))
+        process_images(demo=d, left=True)
+        process_images(demo=d, left=False)
+        process_actions(demo=d)
