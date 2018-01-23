@@ -10,7 +10,7 @@ I save the files in this directory. Here is the setup, by the way.
 
 ![setup_1](setup/setup_calibration_1.JPG?raw=true)
 
-![setup_2](seutp/setup_calibration_2.JPG?raw=true)
+![setup_2](setup/setup_calibration_2.JPG?raw=true)
 
 You can't see it from the pictures due to the lighting, but the calibration
 setup there uses a grid with "containers" in it to enable the end-effectors to
