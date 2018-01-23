@@ -5,6 +5,7 @@ tmp/
 images/
 traj_collector/
 record_master/data/
+*.DS_Store
 
 
 # Byte-compiled / optimized / DLL files
