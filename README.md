@@ -1,12 +1,13 @@
 # Fast Surgical Suturing
 
-The goal of this project is to do some fast surgical suturing. The goal is to
-submit to IROS 2018, due March 1, 2018.
+The goal of this project is to do some fast surgical suturing. We should submit
+a paper before the Spring 2018 semester ends.
 
 Look at the individual repository READMEs, which have LOTS of detail.
 
 This does NOT do any calibration whatsoever. Use the debridement repository for
-that.
+that. (Edit: see the `calibration` directory, as we need to do some basic stuff
+here. Fortunately, for this, only the position is actually needed.)
 
 Related (public) repositories:
 

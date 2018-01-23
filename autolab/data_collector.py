@@ -88,7 +88,7 @@ class DataCollector:
 
 
     def left_image_callback(self, msg):
-        print("in left_image_callback, time: {}".format(time.time() - self.start_t))
+        #print("in left_image_callback, time: {}".format(time.time() - self.start_t))
         if rospy.is_shutdown():
             return
         x,y,w,h = self.lx, self.ly, self.lw, self.lh

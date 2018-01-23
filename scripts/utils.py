@@ -1,5 +1,4 @@
 """ For reducing clutter. """
-
 from autolab.data_collector import DataCollector
 from dvrk.robot import robot
 import cv2
@@ -11,7 +10,6 @@ import sys
 import tfx
 import time
 np.set_printoptions(suppress=True)
-
 
 # ------------
 # dVRK-related
