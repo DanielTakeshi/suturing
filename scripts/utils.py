@@ -158,3 +158,85 @@ def save_images(d, image_dir='images/'):
     for (lkey, rkey) in zip(d.left, d.right):
         cv2.imwrite(image_dir+lkey+"_left.png", d.left[lkey])
         cv2.imwrite(image_dir+rkey+"_right.png", d.right[rkey])
+
+
+# ----------------------------------------
+# Rigid Transformation (or 'registration')
+# ----------------------------------------
+
+
+def solve_rigid_transform(X, Y, debug=True):
+    """
+    Takes in two sets of corresponding points, returns the rigid transformation
+    matrix from the FIRST TO THE SECOND. This is a (3,4) matrix so we'd apply it
+    on the original points in their homogeneous form with the fourth coordinate
+    equal to one. This is slightly different from Brijen's code since I'm using
+    np.array, not np.matrix.
+
+    Notation: A for camera points, B for robot points, so want to find an affine
+    mapping from A -> B with orthogonal rotation and a translation. This means
+    the matrix P here would be written in math as P_{ba}, so b = Pa where a and
+    b are vectors wrt A and B, respectively. 
+    
+    Technically, both a and b should be 4D vectors but we're cheating a bit by
+    leaving the last row of P out ... it's a (3,4) matrix, not a (4,4) matrix,
+    so b is a 3D vector, not 4D.
+    """
+    assert X.shape[0] == Y.shape[0] >= 3
+    assert X.shape[1] == Y.shape[1] == 3
+    A = X.T  # (3,N)
+    B = Y.T  # (3,N)
+
+    # Look for Inge Soderkvist's solution online if confused.
+    meanA = np.mean(A, axis=1, keepdims=True)
+    meanB = np.mean(B, axis=1, keepdims=True)
+    A = A - meanA
+    B = B - meanB
+    covariance = B.dot(A.T)
+    U, sigma, VH = np.linalg.svd(covariance) # VH = V.T, i.e. numpy transposes it for us.
+
+    V = VH.T
+    D = np.eye(3)
+    D[2,2] = np.linalg.det( U.dot(V.T) )
+    R = U.dot(D).dot(V.T)
+    t = meanB - R.dot(meanA)
+    RB_matrix = np.concatenate((R, t), axis=1)
+
+    #################
+    # SANITY CHECKS #
+    #################
+
+    print("\nBegin debug prints for rigid transformation from A to B:")
+    print("meanA:\n{}\nmeanB:\n{}".format(meanA, meanB))
+    print("Rotation R:\n{}\nand R^TR (should be identity):\n{}".format(R, (R.T).dot(R)))
+    print("translation t:\n{}".format(t))
+    print("RB_matrix:\n{}".format(RB_matrix))
+
+    # Get residual to inspect quality of solution. Use homogeneous coordinates for A.
+    # Also, recall that we're dealing with (3,N) matrices, not (N,3).
+    # In addition, we don't want to zero-mean for real applications.
+    A = X.T # (3,N)
+    B = Y.T  # (3,N)
+
+    ones_vec = np.ones((1, A.shape[1]))
+    A_h = np.concatenate((A, ones_vec), axis=0)
+    B_pred = RB_matrix.dot(A_h)
+    assert B_pred.shape == B.shape
+
+    # Careful! Use raw_errors for the RF, but it will depend on pred-targ or targ-pred.
+    raw_errors = B_pred - B # Use pred-targ, of shape (3,N)
+    l2_per_example = np.sum((B-B_pred)*(B-B_pred), axis=0)
+    frobenius_loss = np.mean(l2_per_example)
+
+    if debug:
+        print("\nInput, A.T:\n{}".format(A.T))
+        print("Target, B.T:\n{}".format(B.T))
+        print("Predicted points:\n{}".format(B_pred.T))
+        print("Raw errors, B-B_pred:\n{}".format((B-B_pred).T))
+        print("Mean abs error per dim: {}".format( (np.mean(np.abs(B-B_pred), axis=1))) )
+        print("Residual (L2) for each:\n{}".format(l2_per_example.T))
+        print("loss on data: {}".format(frobenius_loss))
+        print("End of debug prints for rigid transformation.\n")
+
+    assert RB_matrix.shape == (3,4)
+    return RB_matrix
