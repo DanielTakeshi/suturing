@@ -2,27 +2,14 @@
 Follow my notes and get an analytic model of the needle. What this means in our
 context is that I'm trying to control the robot so that the needle tip ends up
 in the correct location.  This should be a self-contained script purely for
-testing the analytic model, and not to be used in practice. 
+learning and testing the analytic model.
 
 Call this code in stages, so `python analytic_model.py --stage X` where:
 
-    - X == 1: do a one-plane calibration, similar to what I did in the ICRA 2018
-      paper. We need calibration to get correct offset vectors since we
-      determine them w.r.t. the camera frames. I don't *think* we need to vary
-      the height, I think just doing it on one height is enough, because with
-      other heights, the tool frame is going to move along with it.
-
-      The major concern I have is if this will work with a fixed dVRK but moving
-      the yaw pitch and rolls, since the three angles don't seem to be quite
-      standard. But that's what the testing stage should reveal (the X==3 case).
-
-      WAIT ... I was calibrating with a fixed rotation. Ahh ... will that change
-      things?
-
-    - X == 2: before doing this, manipulate the dVRK with SNAP so that the
-      needle is at the maximum value of $\phi$, or when the gripper is gripping
-      it at the furthest point from the needle. We also need to get the needle
-      on a flat (foam) surface to make the task easier. 
+    - X == 1: before this, manipulate the dVRK with SNAP so that the needle is
+      at the maximum value of $\phi$, or when the gripper is gripping it at the
+      furthest point from the needle. We also need to get the needle on a flat
+      (foam) surface to make the task easier. 
       
       This stage iteratively stops to let the user manipulate the needle forward
       ever so slightly. At each 'nudge' by the user, the code stops and outputs
@@ -31,13 +18,11 @@ Call this code in stages, so `python analytic_model.py --stage X` where:
       BASE frame. But note that we can simply query our robot position, also
       w.r.t.  the base frame. This gives us offset vectors.
 
-    - X == 3: testing stage. Now we move the dVRK end-effector to various
-      configurations and once again explicitly record needle tips. This time we
-      evaluate the accuracy. This stage is similar to the second one except we
-      don't compute offset vectors. 
-      
-      I will need to cheat and explicitly compute my `\phi`s so that we know
-      which offset vectors to use.
+    - X == 2: testing stage. Move the dVRK end-effector to various locations and
+      once again explicitly record needle tips. This time we evaluate the
+      accuracy. This stage is similar to the second one except we don't compute
+      offset vectors.  I will need to cheat and explicitly compute my `\phi`s so
+      that we know which offset vectors to use.
 
 (c) 2018 by Daniel Seita
 """
@@ -49,12 +34,9 @@ import utils as U
 np.set_printoptions(suppress=True, precision=5)
 
 
-def calibrate(arm1, arm2, d):
-    """ Stage 1. """
-
 
 def offsets(arm1, arm2, d, path_calib):
-    """ Stage 2. """
+    """ Stage 1. """
     assert os.path.isfile(path_calib)
     with open(path_calib, 'r') as ff:
         calib = pickle.load(f)
@@ -67,7 +49,7 @@ def offsets(arm1, arm2, d, path_calib):
 
 
 def evaluate(arm1, arm2, d, path_offsets):
-    """ Stage 3. """
+    """ Stage 2. """
     assert os.path.isfile(path_offsets)
     with open(path_offsets, 'r') as ff:
         offsets = pickle.load(f)
@@ -75,7 +57,7 @@ def evaluate(arm1, arm2, d, path_offsets):
 
 if __name__ == "__main__":
     pp = argparse.ArgumentParser()
-    pp.add_argument('--stage', type=int, help='Must be 0, 1 or 2.')
+    pp.add_argument('--stage', type=int, help='Must be 1 or 2.')
     pp.add_argument('--path_calib', type=str, default='files/analytic_calib.p')
     pp.add_argument('--path_offsets', type=str, default='files/analytic_offsets.p')
     args = pp.parse_args()
@@ -84,10 +66,8 @@ if __name__ == "__main__":
     arm1.close_gripper()
 
     if args.stage == 1:
-        calibrate(arm1, arm2, d)
-    elif args.stage == 2:
         offsets(arm1, arm2, d, args.path_calib)
-    elif args.stage == 3:
+    elif args.stage == 2:
         evaluate(arm1, arm2, d, args.path_offsets)
     else:
         raise ValueError("illegal args.stage = {}".format(args.stage))
