@@ -97,7 +97,12 @@ def click(event, x, y, flags, param):
 
 
 def click_stuff(which):
-    """ Putting this here since we repeat for left and right camera images. """
+    """ 
+    Putting this here since we repeat for left and right camera images.  We
+    actually use this for both offset computation AND the evaluation stage, but
+    we only run one of those in the code which means CENTERS and POINTS won't
+    mess us up with unexpected values.
+    """
     global CENTERS, image
     if which == 'left':
         image = np.copy(d.left['raw'])
@@ -154,17 +159,16 @@ def offsets(arm, d, args, wrist_map_c2l, wrist_map_c2r, wrist_map_l2r):
     2. Then, this code waits until the user has manipulated master tools to pick
     up the needle at some location. EDIT: actually it's easier to just move and
     then assume we translate up by a few mm. I'm getting lack of responses with
-    the master tools, for some reason.
+    the master tools, for some reason. So just move it directly and explicitly.
     
     3. Images will pop-up. Press ESC to terminate the program. Otherwise, we
     click and crop: (a) the end-point of the needle AND (b) the place where the
     dVRK grasps the needle. The latter is mainly to see if this coincides with
     the dVRK's actual position. MUST BE DONE IN ORDER!
     
-    4. This saves into a pickle file by appending, so in theory we just
-    continually add data points. (The main catch is to check that if we change
-    the setup, we're NOT counting those older points ... we'll just have to move
-    them to separate files or delete them.) 
+    4. This saves into a pickle file by appending, so in theory we continually
+    add data points. (The main catch is to check that if we change the setup,
+    we're NOT counting those older points.)
     
     Repeat the process by moving the master tools again, and go to step 2.
     """
@@ -223,7 +227,7 @@ def offsets(arm, d, args, wrist_map_c2l, wrist_map_c2r, wrist_map_l2r):
         phi_c, psi_c = compute_phi_and_psi(d=base_dist_click)
         phi_d, psi_d = compute_phi_and_psi(d=base_dist_dvrk)
 
-        # Bells and whistles. Note 
+        # Bells and whistles.
         base = 'base_'+which+'_'
         info = {}
         info['pos_g_dvrk'] = pos_g
@@ -262,18 +266,128 @@ def offsets(arm, d, args, wrist_map_c2l, wrist_map_c2r, wrist_map_l2r):
         print("  base,   phi: {:.2f}, psi: {:.2f}".format(phi_d, psi_d))
 
 
+def get_offset(offsets, psi, kind, which, debug=False):
+    """ 
+    For now just take the closest offset vector. There may be better ways, e.g.,
+    by taking linearly-interpolated averages.
+    """
+    assert kind in ['click','dvrk']
+    assert which in ['left','right']
+    base = 'base_'+which+'_'
+    closest_idx = -1
+    closest_diff = np.float('inf')
+
+    for idx,info in enumerate(offsets):
+        if kind == 'click':
+            diff = np.abs( info['psi_click_mm'] - psi )
+        elif kind == 'dvrk':
+            diff = np.abs( info['psi_dvrk_mm'] - psi )
+        if diff < closest_diff:
+            closest_idx = idx
+            closest_diff = diff
+    if debug:
+        print("In `get_offset`, closest idx and diff are: {} and {}".format(
+            closest_idx, closest_diff))
+
+    off_dict = offsets[closest_idx]
+    if kind == 'click':
+        return off_dict[base+'offset_click']
+    elif kind == 'dvrk':
+        return off_dict[base+'offset_dvrk']
+
+
 def evaluate(arm, d, args, wrist_map_c2l, wrist_map_c2r, wrist_map_l2r):
     """ Stage 2. 
     
-    Testing stage. Move the dVRK end-effector to various locations and once
-    again explicitly record needle tips. This time we evaluate the accuracy.
-    This stage is similar to the second one except we don't compute offset
-    vectors.  I will need to cheat and explicitly compute my `\phi`s so that we
-    know which offset vectors to use.
+    Testing stage. At a high level, move the dVRK end-effector to various
+    locations and once again explicitly record needle tips. Steps:
+
+    1. Start with the dVRK gripping a needle. Try different orientations, to
+    ensure that performance is orientation-invariant. This time, we should have
+    the suturing phantom there! For now we still have the click interface to
+    accurately compute psi.
+
+    2. To get psi, images pop up from left and right cameras. Press ESC to
+    terminate the program. If we want to proceed, then click and drag boxes of
+    target locations for the needle tip.
+    
+    3. This time, we let the needle move. We do NOT explicitly compute an offset
+    vector because we do not know where the dVRK's end-effector goes.
     """
-    assert os.path.isfile(path_offsets)
-    with open(path_offsets, 'r') as ff:
-        offsets = pickle.load(f)
+    global CENTERS, image
+    which = 'left' if args.arm==1 else 'right'
+    pname = args.path_offsets+'/offsets_{}_arm_data.p'.format(which)
+    if which == 'left':
+        R = wrist_map_c2l
+    else:
+        R = wrist_map_c2r
+    offsets = U.load_pickle_to_list(pname)
+    print("loaded offsets, length: {}".format(len(offsets)))
+
+    # Do stuff here just to grip the needle and get set up for computing phi/psi.
+    arm.open_gripper(50)
+    name = "Left image for evaluation stage. MOVE DVRK, then press any key"
+    U.call_wait_key( cv2.imshow(name, d.left['raw']) )
+    arm.close_gripper()
+    pos,rot = U.pos_rot_arm(arm, nparrays=True)
+    pos[2] += args.z_height
+    U.move(arm, pos, rot)
+    time.sleep(2)
+
+    # The user now clicks stuff. LEFT CAMERA, then RIGHT CAMERA.
+    click_stuff('left')
+    click_stuff('right')
+    assert len(CENTERS) == 4, "Error, len(CENTERS): {}".format(len(CENTERS))
+    assert len(POINTS) == 8, "Error, len(POINTS): {}".format(len(POINTS))
+
+    # New to this method: move the dVRK to a different location.
+    print("Not moving to a new spot, for now.")
+
+    # Now we can actually get phi/psi.
+    pos_g,rot_g = U.pos_rot_arm(arm, nparrays=True)
+    camera_tip  = U.camera_pixels_to_camera_coords(CENTERS[-4], CENTERS[-2], nparrays=True)
+    camera_grip = U.camera_pixels_to_camera_coords(CENTERS[-3], CENTERS[-1], nparrays=True)
+    ct_h        = np.concatenate( (camera_tip,np.ones(1)) )
+    cg_h        = np.concatenate( (camera_grip,np.ones(1)) )
+    base_t      = R.dot(ct_h)
+    base_g      = R.dot(cg_h)
+    camera_dist = np.linalg.norm( camera_tip-camera_grip )
+
+    # Distance based on click interace (should be same as camera) and based
+    # on dvrk, using cartesian position function (this will be different).
+    # Unfortunately the dvrk one is the easiest to use in real applications.
+    base_dist_click = np.linalg.norm( base_t-base_g )
+    base_dist_dvrk  = np.linalg.norm( base_t-pos_g )
+    assert np.abs(base_dist_click - camera_dist) < 1e-5
+
+    # Compute phi and psi based on the STARTING configuration.
+    phi_c, psi_c = compute_phi_and_psi(d=base_dist_click)
+    phi_d, psi_d = compute_phi_and_psi(d=base_dist_dvrk)
+
+    # --------------------------------------------------------------------------
+    # Compute offset vector wrt base. I don't think the order of subtraction
+    # matters as long as in real applications, we are consistent with usage, so
+    # in application we'd do (pos_n_tip_wrt_base)-(offset). 
+    #
+    # NOTE: this is only the offset vector wrt the starting position that we
+    # have, but there are two hypotheses. 
+    #
+    #   1. That we can avoid computing these if we pre-compute before hand (as
+    #   we have code for) so maybe we don't need a click interface. 
+    #   2. To get the needle to go somewhere, it's a matter of doing the
+    #   arithmetic as specified earlier in the comments! 
+    #
+    # For now we'll compute the two offsets wrt base because we might as well
+    # use it to simplify the task (but this is only simplifying the detection of
+    # the needle tip and where the dVRK grips it).
+    # --------------------------------------------------------------------------
+    offset_wrt_base_click = base_t - base_g
+    offset_wrt_base_dvrk  = base_t - pos_g
+    offset_saved =  get_offset(offsets, psi=psi_c, kind='click', which=which, debug=True)
+
+    print("offset_wrt_base_click: {}".format(offset_wrt_base_click))
+    print("offset_wrt_base_dvrk:  {}".format(offset_wrt_base_dvrk))
+    print("offset_saved:          {}".format(offset_saved))
 
 
 if __name__ == "__main__":
