@@ -2,7 +2,7 @@
 This is for calibration, but using 'wrist calibration' so that the camera pixels
 corresond to roughly where the wrists are located, NOT where the end-effector
 TIPS are located, which is what I had before. The grid has 25 spots, which we
-better indicate via clicking. Keep the brightness small at 10%.
+better indicate via clicking. Keep the brightness small at 10-20%.
 
 Usage: `python calibration/calibrate_wrists.py`
 

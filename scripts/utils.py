@@ -23,12 +23,15 @@ STEREO_MODEL = image_geometry.StereoCameraModel()
 STEREO_MODEL.fromCameraInfo(C_LEFT_INFO, C_RIGHT_INFO)
 
 
-def camera_pixels_to_camera_coords(left_pt, right_pt):
+def camera_pixels_to_camera_coords(left_pt, right_pt, nparrays=False):
     """ Given [lx,ly] and [rx,ry], determine [cx,cy,cz]. Everything should be LISTS. """
     assert len(left_pt) == len(right_pt) == 2
     disparity = np.linalg.norm( np.array(left_pt) - np.array(right_pt) )
     (xx,yy,zz) = STEREO_MODEL.projectPixelTo3d( (left_pt[0],left_pt[1]), disparity )
-    return [xx, yy, zz] 
+    if nparrays:
+        return np.array([xx,yy,zz])
+    else:
+        return [xx,yy,zz] 
 
 
 def init(sleep_time=0):
@@ -116,6 +119,19 @@ def store_pickle(fname, info, mode='w'):
     pickle.dump(info, f)
     f.close()
 
+
+def get_len_of_pickle(filename):
+    """ Compute how many elements are in this pickle file. """
+    f = open(filename,'r')
+    data = []
+    while True:
+        try:
+            data.append(pickle.load(f))
+        except EOFError:
+            break
+    f.close()
+    return len(data)
+ 
 
 def load_pickle_to_list(filename, squeeze=True):
     """  Load from pickle file in a list, helpful if we've appended a lot.  """
