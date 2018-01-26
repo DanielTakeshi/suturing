@@ -21,9 +21,10 @@ Just look at the top of each python file for usage and expected output.
 
 ## Analytic Modeling
 
-- Use `analytic_model.py` to get an analytic model of the needle tip position.
+- Use `analytic_model.py` to get an analytic model of the needle tip position. I
+  use the setup as shown below:
 
-
+  ![setup](images/setup_analytic_1.JPG?raw=true)
 
 ## Quick Testing
 
