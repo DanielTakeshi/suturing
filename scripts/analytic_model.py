@@ -9,6 +9,24 @@ reason why we do separate arms at a time is that the two arms have different
 base frames, so it's a bit easier to separate them. See the methods for more
 detailed documentation. Also, it's mainly the left arm that we care about.
 
+Current problems:
+
+  - Even after calibration with that grid of 'small empty buckets' (not sure
+    what to call them) the gripper's tool frame center is NOT the same as the
+    area where I click it in the images.
+
+      Possible remedy: remember the saved data from clicks and learn a map
+      from psi_dvrk --> psi_camera, and use the data from the camera, assuming
+      that knowing psi is all that matters in practice.
+
+      Or it could just be that the original calibration was not good enough.
+
+  - SNAP doesn't always keep the needle in place, sometimes the needle is
+    gripped but doesn't 'make it' through the ridge.
+
+Fortunately, many of our sanity checks are passing. For instance, the distance
+measured from the dvrk base is larger than the camera click.
+
 (c) 2018 by Daniel Seita
 """
 from autolab.data_collector import DataCollector
@@ -106,6 +124,26 @@ def click_stuff(which):
     print("finished clicking on {} image".format(which))
 
 
+def compute_phi_and_psi(d):
+    """ 
+    Gotta do some trigonometry. Adjust needle params!! 
+        sin(phi/2) = (d/2)/r
+    where d is the absolute distance from the gripper to the needle tip.
+    BTW we're going to express things in millimeters here. But d is in meters.
+    """
+    FRACTION = 3./8
+    DIAMETER = 36.
+    d = d * 1000.0 # we want millimeters
+
+    phi_rad = 2. * np.arcsin( (d/2.) / (DIAMETER/2.) )
+    phi_deg = phi_rad * (180./np.pi)
+    psi = (np.pi*DIAMETER) * (phi_deg / 360.)
+
+    assert (phi_deg / 360.) < FRACTION
+    assert d < psi
+    return phi_deg, psi
+
+
 def offsets(arm, d, args, wrist_map_c2l, wrist_map_c2r, wrist_map_l2r):
     """ Stage 1. 
     
@@ -132,7 +170,7 @@ def offsets(arm, d, args, wrist_map_c2l, wrist_map_c2r, wrist_map_l2r):
     """
     global CENTERS, image
     which = 'left' if args.arm==1 else 'right'
-    pname = args.path_offsets+'/offsets_{}_data.p'.format(which)
+    pname = args.path_offsets+'/offsets_{}_arm_data.p'.format(which)
     if which == 'left':
         R = wrist_map_c2l
     else:
@@ -140,22 +178,24 @@ def offsets(arm, d, args, wrist_map_c2l, wrist_map_c2r, wrist_map_l2r):
     num_offsets = 0
 
     while True:
-        # Just to give an overall view before grabbing needle. OK to only see the left image.
+        # Just an overall view before grabbing needle. OK to only see the left
+        # image. And BTW, this is when we change the dVRK to get more data.
         arm.open_gripper(50)
         print("\nNow starting new offset with {} offsets so far...".format(num_offsets))
         name = "Left image w/{} offsets so far. MOVE DVRK, press any key".format(num_offsets)
         U.call_wait_key( cv2.imshow(name, d.left['raw']) )
         arm.close_gripper()
         pos,rot = U.pos_rot_arm(arm, nparrays=True)
-        pos[2] += 0.010
+        pos[2] += args.z_height
         U.move(arm, pos, rot)
+        time.sleep(2)
 
         # The user now clicks stuff. LEFT CAMERA, then RIGHT CAMERA.
         click_stuff('left')
         click_stuff('right')
 
         # Compute data to store. We stored left tip, left grip, right tip, right grip.
-        pos,rot = U.pos_rot_arm(arm, nparrays=True)
+        pos_g,rot_g = U.pos_rot_arm(arm, nparrays=True)
         assert len(CENTERS) % 4 == 0, "Error, len(CENTERS): {}".format(len(CENTERS))
         camera_tip  = U.camera_pixels_to_camera_coords(CENTERS[-4], CENTERS[-2], nparrays=True)
         camera_grip = U.camera_pixels_to_camera_coords(CENTERS[-3], CENTERS[-1], nparrays=True)
@@ -166,19 +206,41 @@ def offsets(arm, d, args, wrist_map_c2l, wrist_map_c2r, wrist_map_l2r):
         base_t = R.dot(ct_h)
         base_g = R.dot(cg_h)
         camera_dist = np.linalg.norm( camera_tip-camera_grip )
-        base_dist   = np.linalg.norm( base_t-base_g )
+
+        # Distance based on click interace (should be same as camera) and based
+        # on dvrk, using cartesian position function (this will be different).
+        # Unfortunately the dvrk one is the easiest to use in real applications.
+        base_dist_click = np.linalg.norm( base_t-base_g )
+        base_dist_dvrk  = np.linalg.norm( base_t-pos_g )
+        assert np.abs(base_dist_click - camera_dist) < 1e-5
+
+        # Compute offset vector wrt base frame. I don't think the order of
+        # subtraction matters as long as in real applications, we are consistent
+        # with usage, so in application we'd do (pos_n_tip_wrt_base)-(offset).
+        offset_wrt_base_click = base_t - base_g
+        offset_wrt_base_dvrk  = base_t - pos_g
+
+        phi_c, psi_c = compute_phi_and_psi(d=base_dist_click)
+        phi_d, psi_d = compute_phi_and_psi(d=base_dist_dvrk)
 
         # Bells and whistles. Note 
         base = 'base_'+which+'_'
         info = {}
-        info['pos_dvrk'] = pos
-        info['rot_dvrk'] = rot
+        info['pos_g_dvrk'] = pos_g
+        info['rot_g_dvrk'] = rot_g
         info['camera_tip'] = camera_tip
         info['camera_grip'] = camera_grip
         info[base+'tip'] = base_t
         info[base+'grip'] = base_g
         info['camera_dist'] = camera_dist 
-        info[base+'dist'] = base_dist
+        info[base+'dist_click'] = base_dist_click
+        info[base+'dist_dvrk'] = base_dist_dvrk
+        info[base+'offset_click'] = offset_wrt_base_click
+        info[base+'offset_dvrk'] = offset_wrt_base_dvrk
+        info['phi_click_deg'] = phi_c
+        info['psi_click_mm'] = psi_c
+        info['phi_dvrk_deg'] = phi_d
+        info['psi_dvrk_mm'] = psi_d
 
         num_offsets += 1
         U.store_pickle(fname=pname, info=info, mode='a')
@@ -186,15 +248,18 @@ def offsets(arm, d, args, wrist_map_c2l, wrist_map_c2r, wrist_map_l2r):
 
         print("Computed and saved {} offset vectors in this session".format(num_offsets))
         print("We have {} items total (including prior sessions)".format(num_before_this))
-        print("  pos, rot = {}, {}".format(pos, rot))
+        print("  pos: {}\n  rot: {}".format(pos_g, rot_g))
         print("  for tip, CENTER coords (left,right): {}, {}".format(CENTERS[-4], CENTERS[-2]))
         print("  for grip, CENTER coords (left,right): {}, {}".format(CENTERS[-3], CENTERS[-1]))
         print("  camera_tip:  {}".format(camera_tip))
         print("  camera_grip: {}".format(camera_grip))
         print("  base_{}_tip:  {}".format(which, base_t))
         print("  base_{}_grip: {}".format(which, base_g))
-        print("  camera_dist: {}".format(camera_dist))
-        print("  base_dist:   {}".format(base_dist))
+        print("  camera_dist (mm):      {:.2f}".format(camera_dist*1000.))
+        print("  base_dist_camera (mm): {:.2f}".format(base_dist_click*1000.))
+        print("  base_dist_dvrk (mm):   {:.2f}".format(base_dist_dvrk*1000.))
+        print("  camera, phi: {:.2f}, psi: {:.2f}".format(phi_c, psi_c))
+        print("  base,   phi: {:.2f}, psi: {:.2f}".format(phi_d, psi_d))
 
 
 def evaluate(arm, d, args, wrist_map_c2l, wrist_map_c2r, wrist_map_l2r):
@@ -217,6 +282,7 @@ if __name__ == "__main__":
     pp.add_argument('--stage', type=int, help='Must be 1 or 2.')
     pp.add_argument('--path_calib', type=str, default='calibration/')
     pp.add_argument('--path_offsets', type=str, default='scripts/offsets')
+    pp.add_argument('--z_height', type=float, default=0.008)
     args = pp.parse_args()
     print("Did you remember to remove the old offsets file if we're ignoring that data?")
 
