@@ -57,8 +57,8 @@ np.set_printoptions(suppress=True, precision=5)
 PATH_CALIB = 'calibration/'
 ROT_FILE = 'scripts/files_rotations/rotations_data.p'
 Z_OFFSET = 0.008
-HOME_POS_ARM1 = [0.0982,  0.0226, -0.110]
-HOME_ROT_ARM1 = [0.0,      0.0,     180.0]
+HOME_POS_ARM1 = [0.0982,  0.0226, -0.105]
+HOME_ROT_ARM1 = [0.0,     0.0,     160.0]
 
 
 def get_in_good_starting_position(arm, which='arm1'):
@@ -79,6 +79,8 @@ def get_in_good_starting_position(arm, which='arm1'):
     print("(Goal was: {} and {}".format(HOME_POS_ARM1, HOME_ROT_ARM1))
     R = U.rotation_matrix_3x3_axis(angle=180, axis='z')
     print("With rotation matrix:\n{}".format(R))
+    print("Now exiting...")
+    sys.exit()
 
 
 # For the mouse callback method, dragging boxes on images.
@@ -349,8 +351,8 @@ def collect_data(arm, R, wrist_map_c2l):
     data = defaultdict(list)
 
     # We'll test out these equally-spaced values. Note 180 = -180.
-    yaws    = [-60, -20, 20, 60]
-    pitches = [-30, -10, 10, 30]
+    yaws    = [-30, 0, 30]
+    pitches = [-30, 0, 30]
     rolls   = [-160, -180, 160]
     idx = 0
 
@@ -368,7 +370,7 @@ def collect_data(arm, R, wrist_map_c2l):
     pos, rot = U.pos_rot_arm(arm, nparrays=True)
     print("we have pos, rot: {}, {}".format(pos, rot))
 
-    U.move(arm, pos=t_st, rot=[-60, -30, -160])
+    U.move(arm, pos=t_st, rot=[-30, -30, -160])
     time.sleep(1)
     pos, rot = U.pos_rot_arm(arm, nparrays=True)
     print("we have pos, rot: {}, {}".format(pos, rot))
@@ -418,12 +420,12 @@ if __name__ == "__main__":
     wrist_map_c2r = U.load_pickle_to_list(PATH_CALIB+'wrist_map_c2r.p', squeeze=True)
     wrist_map_l2r = U.load_pickle_to_list(PATH_CALIB+'wrist_map_l2r.p', squeeze=True)
 
-    # If necessary. Comment it out as needed.
+    # If necessary. Comment this out as needed.
     #get_in_good_starting_position(arm1)
+
+    # Otherwise we proceed with what we really want: collecting data.
     arm1.open_gripper(60)
     time.sleep(2)
-   
-    # Otherwise we proceed with what we really want: collecting data.
     arm1.close_gripper()
     pos, rot = U.pos_rot_arm(arm1, nparrays=True)
     print("starting position and rotation:")
