@@ -55,19 +55,19 @@ def move(arm, pos, rot, speed='Slow'):
     rot: [list]
         The desired rotation, in list form with yaw, pitch, and roll.
     SPEED_CLASS: [String]
-        Slow, Medium, or Fast.
+        Slow, Medium, or Fast, case insensitive.
     """
     if pos[2] < -0.17:
         raise ValueError("Desired z-coord of {} is not safe! Terminating!".format(pos[2]))
-    if speed == 'Slow':
+    if speed.lower() == 'slow':
         arm.move_cartesian_frame_linear_interpolation(
                 tfx.pose(pos, tfx.tb_angles(rot[0],rot[1],rot[2])), 0.03
         )
-    elif speed == 'Medium':
+    elif speed.lower() == 'medium':
         arm.move_cartesian_frame_linear_interpolation(
                 tfx.pose(pos, tfx.tb_angles(rot[0],rot[1],rot[2])), 0.06
         )
-    elif speed == 'Fast':
+    elif speed.lower() == 'fast':
         arm.move_cartesian_frame(tfx.pose(pos, tfx.tb_angles(rot[0],rot[1],rot[2])))
     else:
         raise ValueError()
@@ -179,6 +179,35 @@ def save_images(d, image_dir='images/'):
 # ----------------------------------------
 # Rigid Transformation (or 'registration')
 # ----------------------------------------
+
+def rotation_matrix_3x3_axis(angle, axis):
+    """ 
+    Determine the rotation matrix corresponding to ONE axis.  Note that we need
+    degree*(pi/180) = radian. For now we just assume our angle is between the
+    usual -180 and 180 as specified from the dVRK.
+    """
+    assert axis.lower() in ['x','y','z']
+    assert -180.0 <= a <= 180.0
+    angle_r = angle * (np.pi / 180.0)
+    sa = np.sin(angle_r)
+    ca = np.cos(angle_r)
+
+    if axis == 'x':
+        R = np.array([ [1,  0,    0],
+                       [0,  ca, -sa],
+                       [0,  sa,  ca],
+        ])
+    elif axis == 'y':
+        R = np.array([ [ca,  0,  sa],
+                       [0,   1,   0],
+                       [-sa, 0,  ca],
+        ])
+    elif axis == 'z':
+        R = np.array([ [ca, -sa,  0],
+                       [sa,  ca,  0],
+                       [0,    0,  1],
+        ])
+    return R
 
 
 def solve_rigid_transform(X, Y, debug=True):

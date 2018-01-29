@@ -26,6 +26,9 @@ Just look at the top of each python file for usage and expected output.
 
   ![setup](images/setup_analytic_1.JPG?raw=true)
 
+- The analytic modeling code requires knowing which order of rotations are
+  applied for the dVRK. Use `rotations.py` for this.
+ 
 ## Quick Testing
 
 - `needle_images.py` and `sandbox_first.py` are sandbox/quick testing files.
