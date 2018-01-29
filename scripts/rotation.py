@@ -53,16 +53,38 @@ import numpy as np
 import utils as U
 np.set_printoptions(suppress=True, precision=5)
 
+# ADJUST!
+PATH_CALIB = 'calibration/'
+ROT_FILE = 'scripts/files_rotations/rotations_data.p'
+Z_OFFSET = 0.008
+HOME_POS_ARM1 = [0.0982,  0.0226, -0.110]
+HOME_ROT_ARM1 = [0.0,      0.0,     180.0]
+
+
+def get_in_good_starting_position(arm, which='arm1'):
+    """ 
+    Only meant so we get a good starting position, to compensate for how
+    commanding the dVRK to go to a position/rotation doesn't actually work that
+    well, particularly for the rotations. Some human direct touch is needed.
+    """
+    assert which == 'arm1'
+    pos, rot = U.pos_rot_arm(arm, nparrays=True)
+    print("(starting method) starting position and rotation:")
+    print(pos, rot)
+    U.move(arm, HOME_POS_ARM1, HOME_ROT_ARM1, speed='slow')
+    time.sleep(2)
+    print("(starting method) position and rotation after moving:")
+    pos, rot = U.pos_rot_arm(arm, nparrays=True)
+    print(pos, rot)
+    print("(Goal was: {} and {}".format(HOME_POS_ARM1, HOME_ROT_ARM1))
+    R = U.rotation_matrix_3x3_axis(angle=180, axis='z')
+    print("With rotation matrix:\n{}".format(R))
+
+
 # For the mouse callback method, dragging boxes on images.
 POINTS = []
 CENTERS = []
 image = None
-
-# ADJUST!
-PATH_CALIB = 'calibration/'
-Z_OFFSET = 0.008
-HOME_POS_ARM1 = [0.09825,  0.02257, -0.11451]
-HOME_ROT_ARM1 = [0.0,      0.0,     180.0]
 
 
 def click(event, x, y, flags, param):
@@ -139,26 +161,6 @@ def click_stuff(which):
     assert len(CENTERS) == old_len + 2
     assert len(POINTS) % 2 == 0
     print("finished clicking on {} image".format(which))
-
-
-def compute_phi_and_psi(d):
-    """ 
-    Gotta do some trigonometry. Adjust needle params!! 
-        sin(phi/2) = (d/2)/r
-    where d is the absolute distance from the gripper to the needle tip.
-    BTW we're going to express things in millimeters here. But d is in meters.
-    """
-    FRACTION = 3./8
-    DIAMETER = 36.
-    d = d * 1000.0 # we want millimeters
-
-    phi_rad = 2. * np.arcsin( (d/2.) / (DIAMETER/2.) )
-    phi_deg = phi_rad * (180./np.pi)
-    psi = (np.pi*DIAMETER) * (phi_deg / 360.)
-
-    assert (phi_deg / 360.) < FRACTION
-    assert d < psi
-    return phi_deg, psi
 
 
 def offsets(arm, d, args, wrist_map_c2l, wrist_map_c2r, wrist_map_l2r):
@@ -238,74 +240,6 @@ def offsets(arm, d, args, wrist_map_c2l, wrist_map_c2r, wrist_map_l2r):
 
         phi_c, psi_c = compute_phi_and_psi(d=base_dist_click)
         phi_d, psi_d = compute_phi_and_psi(d=base_dist_dvrk)
-
-        # Bells and whistles.
-        base = 'base_'+which+'_'
-        info = {}
-        info['pos_g_dvrk'] = pos_g
-        info['rot_g_dvrk'] = rot_g
-        info['camera_tip'] = camera_tip
-        info['camera_grip'] = camera_grip
-        info[base+'tip'] = base_t
-        info[base+'grip'] = base_g
-        info['camera_dist'] = camera_dist 
-        info[base+'dist_click'] = base_dist_click
-        info[base+'dist_dvrk'] = base_dist_dvrk
-        info[base+'offset_click'] = offset_wrt_base_click
-        info[base+'offset_dvrk'] = offset_wrt_base_dvrk
-        info['phi_click_deg'] = phi_c
-        info['psi_click_mm'] = psi_c
-        info['phi_dvrk_deg'] = phi_d
-        info['psi_dvrk_mm'] = psi_d
-
-        num_offsets += 1
-        U.store_pickle(fname=pname, info=info, mode='a')
-        num_before_this = U.get_len_of_pickle(pname)
-
-        print("Computed and saved {} offset vectors in this session".format(num_offsets))
-        print("We have {} items total (including prior sessions)".format(num_before_this))
-        print("  pos: {}\n  rot: {}".format(pos_g, rot_g))
-        print("  for tip, CENTER coords (left,right): {}, {}".format(CENTERS[-4], CENTERS[-2]))
-        print("  for grip, CENTER coords (left,right): {}, {}".format(CENTERS[-3], CENTERS[-1]))
-        print("  camera_tip:  {}".format(camera_tip))
-        print("  camera_grip: {}".format(camera_grip))
-        print("  base_{}_tip:  {}".format(which, base_t))
-        print("  base_{}_grip: {}".format(which, base_g))
-        print("  camera_dist (mm):      {:.2f}".format(camera_dist*1000.))
-        print("  base_dist_camera (mm): {:.2f}".format(base_dist_click*1000.))
-        print("  base_dist_dvrk (mm):   {:.2f}".format(base_dist_dvrk*1000.))
-        print("  camera, phi: {:.2f}, psi: {:.2f}".format(phi_c, psi_c))
-        print("  base,   phi: {:.2f}, psi: {:.2f}".format(phi_d, psi_d))
-
-
-def get_offset(offsets, psi, kind, which, debug=False):
-    """ 
-    For now just take the closest offset vector. There may be better ways, e.g.,
-    by taking linearly-interpolated averages.
-    """
-    assert kind in ['click','dvrk']
-    assert which in ['left','right']
-    base = 'base_'+which+'_'
-    closest_idx = -1
-    closest_diff = np.float('inf')
-
-    for idx,info in enumerate(offsets):
-        if kind == 'click':
-            diff = np.abs( info['psi_click_mm'] - psi )
-        elif kind == 'dvrk':
-            diff = np.abs( info['psi_dvrk_mm'] - psi )
-        if diff < closest_diff:
-            closest_idx = idx
-            closest_diff = diff
-    if debug:
-        print("In `get_offset`, closest idx and diff are: {} and {}".format(
-            closest_idx, closest_diff))
-
-    off_dict = offsets[closest_idx]
-    if kind == 'click':
-        return off_dict[base+'offset_click']
-    elif kind == 'dvrk':
-        return off_dict[base+'offset_dvrk']
 
 
 def evaluate(arm, d, args, wrist_map_c2l, wrist_map_c2r, wrist_map_l2r):
@@ -402,33 +336,106 @@ def evaluate(arm, d, args, wrist_map_c2l, wrist_map_c2r, wrist_map_l2r):
     print("offset_saved:          {}".format(offset_saved))
 
 
-def get_in_good_starting_position(arm, which='arm1'):
-    """ 
-    Only meant so we get a good starting position, to compensate for how
-    commanding the dVRK to go to a position/rotation doesn't actually work that
-    well, particularly for the rotations. Some human direct touch is needed.
+def collect_data(arm, R, wrist_map_c2l):
+    """ Collects data points to determine which rotation matrix we're using.
+
+    The `t_st` and `R_st` define the rigid body from the tool to the arm base.
+    Don't forget that the needle must be gripped with SNAP so that the tip
+    vector `n_t` remains consistent wrt the tool (t) frame.
     """
-    assert which == 'arm1'
+    R_z = R
     pos, rot = U.pos_rot_arm(arm, nparrays=True)
-    print("(starting method) starting position and rotation:")
-    print(pos, rot)
-    U.move(arm, HOME_POS_ARM1, HOME_ROT_ARM1, speed='slow')
-    time.sleep(2)
-    print("(starting method) position and rotation after moving:")
+    t_st = pos
+    data = defaultdict(list)
+
+    # We'll test out these equally-spaced values. Note 180 = -180.
+    yaws    = [-60, -20, 20, 60]
+    pitches = [-30, -10, 10, 30]
+    rolls   = [-160, -180, 160]
+    idx = 0
+
+    # --------------------------------------------------------------------------
+    # I think it helps the dVRK to move to the first rotation *incrementally*.
+    print("We first incrementally move to the starting rotation ...")
+
+    U.move(arm, pos=t_st, rot=[0, 0, -160])
+    time.sleep(1)
     pos, rot = U.pos_rot_arm(arm, nparrays=True)
-    print(pos, rot)
-    print("(Goal was: {} and {}".format(HOME_POS_ARM1, HOME_ROT_ARM1))
+    print("we have pos, rot: {}, {}".format(pos, rot))
+
+    U.move(arm, pos=t_st, rot=[0, -30, -160])
+    time.sleep(1)
+    pos, rot = U.pos_rot_arm(arm, nparrays=True)
+    print("we have pos, rot: {}, {}".format(pos, rot))
+
+    U.move(arm, pos=t_st, rot=[-60, -30, -160])
+    time.sleep(1)
+    pos, rot = U.pos_rot_arm(arm, nparrays=True)
+    print("we have pos, rot: {}, {}".format(pos, rot))
+
+    print("(End of incrementally moving to start)\n")
+    # --------------------------------------------------------------------------
+
+    # NOW begin the loop over different possible rotations.
+    for alpha in yaws:
+        for beta in pitches:
+            for gamma in rolls:
+                idx += 1
+                rot_targ = [alpha, beta, gamma]
+                U.move(arm, pos=t_st, rot=rot_targ)
+                time.sleep(2)
+                pos, rot = U.pos_rot_arm(arm, nparrays=True)
+
+                # A human now clicks on the windows to get needle TIP position.
+                wname = "our {}-th TARGET rotation is {}".format(idx, rot_targ)
+                # TODO
+
+                # Bells and whistles, a bit inefficient but whatever.
+                data['pos_s_tip'].append(None) # TODO
+                data['pos_t_tip'].append(None) # TODO
+                data['t_st'].append(t_st)
+                data['pos_s_tool'].append(pos)
+                data['rot_s_targ'].append(rot_targ)
+                data['rot_s_real'].append(rot)
+                print("\nAdding {}-th data point".format(idx))
+                print("TARGET (yaw,pitch,roll):  {}".format(rot_targ))
+                print("Actual (yaw,pitch,roll):  {}".format(rot))
+                print("Target pos (i.e., t_st):  {}".format(t_st))
+                print("Actual pos from command:  {}".format(pos))
+
+    return data
+
+
+def determine_rotation(data):
+    """ Determines the rotation matrix based on data from `collect_data()`. """
+    pass
 
 
 if __name__ == "__main__":
+    assert not os.path.isfile(ROT_FILE)
     arm1, _, d = U.init()
-    arm1.open_gripper(60)
-    time.sleep(1)
     wrist_map_c2l = U.load_pickle_to_list(PATH_CALIB+'wrist_map_c2l.p', squeeze=True)
     wrist_map_c2r = U.load_pickle_to_list(PATH_CALIB+'wrist_map_c2r.p', squeeze=True)
     wrist_map_l2r = U.load_pickle_to_list(PATH_CALIB+'wrist_map_l2r.p', squeeze=True)
 
-    # If necessary. Might comment it out as needed.
-    get_in_good_starting_position(arm1)
+    # If necessary. Comment it out as needed.
+    #get_in_good_starting_position(arm1)
+    arm1.open_gripper(60)
+    time.sleep(2)
+   
+    # Otherwise we proceed with what we really want: collecting data.
+    arm1.close_gripper()
+    pos, rot = U.pos_rot_arm(arm1, nparrays=True)
+    print("starting position and rotation:")
+    print(pos, rot)
+    print("HOME_POS_ARM1: {}".format(HOME_POS_ARM1))
+    print("HOME_ROT_ARM1: {}".format(HOME_ROT_ARM1))
+    R_real    = U.rotation_matrix_3x3_axis(angle=rot[2], axis='z')
+    R_desired = U.rotation_matrix_3x3_axis(angle=180, axis='z')
+    print("With actual rotation matrix:\n{}".format(R_real))
+    print("With desired rotation matrix:\n{}".format(R_desired))
 
-    # Use `rotation_matrix_3x3_axis(angle, axis)` for getting single-axes R matrices.
+    # Collect data and determine most accurate rotation matrix.
+    data = collect_data(arm1, R_real, wrist_map_c2l)
+    U.store_pickle(fname=ROT_FILE, info=data)
+    determine_rotation(data)

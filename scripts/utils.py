@@ -187,7 +187,7 @@ def rotation_matrix_3x3_axis(angle, axis):
     usual -180 and 180 as specified from the dVRK.
     """
     assert axis.lower() in ['x','y','z']
-    assert -180.0 <= a <= 180.0
+    assert -180.0 <= angle <= 180.0
     angle_r = angle * (np.pi / 180.0)
     sa = np.sin(angle_r)
     ca = np.cos(angle_r)
