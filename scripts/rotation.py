@@ -56,6 +56,7 @@ np.set_printoptions(suppress=True, precision=5)
 # ADJUST!
 PATH_CALIB = 'calibration/'
 ROT_FILE = 'scripts/files_rotations/rotations_data.p'
+TIP_FILE = 'scripts/files_rotations/needle_tip_data.p'
 Z_OFFSET = 0.008
 HOME_POS_ARM1 = [0.0982,  0.0126, -0.105]
 HOME_ROT_ARM1 = [0.0,     0.0,     160.0]
@@ -173,12 +174,32 @@ def get_tip_needle(arm, d, idx, rot_targ):
     return needle_tip_c
 
 
+def collect_tip_data(arm1, R_real, R_desired, wrist_map_c2l, d):
+    """ Collects data points on the needle tips.
+    
+    We want to be at rotation [0, 0, 180] (equivalently, -180 for the last
+    part, the `roll`) so that we can assume we know the rotation matrix. Assumes
+    that the roll belongs to the z-axis. Due to imperfections, we won't get this
+    exactly.
+
+    The goal here is to determine as best an estimate of the position of the
+    needle TIP wrt the TOOL frame as possible. We'll run this through several
+    different positions, each time clicking to get an estimate, and then we
+    average those together.
+    """
+    pass
+
+
 def collect_data(arm, R, wrist_map_c2l, d):
     """ Collects data points to determine which rotation matrix we're using.
 
     The `t_st` and `R_st` define the rigid body from the tool to the arm base.
     Don't forget that the needle must be gripped with SNAP so that the tip
     vector `n_t` remains consistent wrt the tool (t) frame.
+
+    Needs to be called directly after `collect_tip_data()` so that the position
+    of the needle tip wrt the TOOL frame is the same as earlier when we were
+    explicitly computing/estimating that in `collect_tip_data()`.
     """
     R_z = R
     pos, rot = U.pos_rot_arm(arm, nparrays=True)
@@ -259,13 +280,14 @@ if __name__ == "__main__":
     wrist_map_l2r = U.load_pickle_to_list(PATH_CALIB+'wrist_map_l2r.p', squeeze=True)
 
     # We're on stage 1, 2, or 3. ***ADJUST THIS***.
-    stage = 3
+    stage = 2
 
     if stage == 1:
         get_in_good_starting_position(arm1)
+
     elif stage == 2:
         assert not os.path.isfile(ROT_FILE)
-        # Collect data and save it.
+        assert not os.path.isfile(TIP_FILE)
         arm1.open_gripper(60)
         time.sleep(2)
         arm1.close_gripper()
@@ -278,10 +300,18 @@ if __name__ == "__main__":
         R_desired = U.rotation_matrix_3x3_axis(angle=180, axis='z')
         print("With actual rotation matrix:\n{}".format(R_real))
         print("With desired rotation matrix:\n{}".format(R_desired))
+
+        # Get position of the needle TIP wrt the base.
+        tip_data = collect_tip_data(arm1, R_real, R_desired, wrist_map_c2l, d)
+        U.store_pickle(fname=TIP_FILE, info=tip_data)
+
+        # Now collect data from different rotations, using SAME needle grip.
         data = collect_data(arm1, R_real, wrist_map_c2l, d)
         U.store_pickle(fname=ROT_FILE, info=data)
+
     elif stage == 3:
         # Collect data and determine most accurate rotation matrix.
+        # TODO: load...
         determine_rotation(data)
     else: 
         raise ValueError()
