@@ -175,7 +175,7 @@ def get_tip_needle(arm, d, idx, rot_targ):
     return needle_tip_c
 
 
-def collect_tip_data(arm1, R_real, R_desired, wrist_map_c2l, d):
+def collect_tip_data(arm, R_real, R_desired, wrist_map_c2l, d):
     """ Collects data points on the needle tips.
     
     We want to be at rotation [0, 0, 180] (equivalently, -180 for the last part,
@@ -229,7 +229,7 @@ def collect_tip_data(arm1, R_real, R_desired, wrist_map_c2l, d):
             data['pos_ntip_wrt_r'].append(needle_tip_r)
 
             print("\nAdding {}-th data point for `collect_tip_data()`.".format(idx))
-            print("pos_tool_wrt_s_targ:  {}".format(pos_tool_wrt_base_targ))
+            print("pos_tool_wrt_s_targ:  {}".format(np.array(pos_tool_wrt_base_targ)))
             print("pos_tool_wrt_s_code:  {}".format(pos_tool_wrt_base_code))
             print("rot_tool_wrt_s_targ:  {}".format(home_rot))
             print("rot_tool_wrt_s_code:  {}".format(rot_tool_wrt_base_code))
@@ -243,6 +243,7 @@ def collect_tip_data(arm1, R_real, R_desired, wrist_map_c2l, d):
     for idx,item in enumerate(data['pos_ntip_wrt_r']):
         print("{}, {}".format(item, idx))
         n_t += item
+    n_t /= len(data['pos_ntip_wrt_r'])
     print("average `n_t` to use later: {}\n".format(n_t))
     return data
 
@@ -338,6 +339,7 @@ def determine_rotation(arm, d, tip_data, rot_data):
     for this_n_t in tip_data['pos_ntip_wrt_r']:
         n_t += this_n_t
     n_t /= len(tip_data['pos_ntip_wrt_r'])
+    print("Our n_t to use in this stage: {}".format(n_t))
 
     K = len(rot_data['pos_ntip_wrt_s'])
     errors_zyz = []
@@ -368,12 +370,14 @@ def determine_rotation(arm, d, tip_data, rot_data):
         err_zyx = np.linalg.norm(lhs - rhs_zyx)
         errors_zyz.append( err_zyz )
         errors_zyx.append( err_zyx )
-        print("err_zyz: {} for {}-th sample".format(err_zyz, idx))
-        print("err_zyx: {} for {}-th sample".format(err_zyx, idx))
+        print("\nerr_zyz: {:.3f} for {}-th sample".format(err_zyz, k))
+        print("err_zyx: {:.3f} for {}-th sample".format(err_zyx, k))
+        print("R_zyz:\n{}".format(R_zyz))
+        print("R_zyx:\n{}".format(R_zyx))
 
     print("\nDone with evaluation!")
-    print("zyz has avg error {}".format(np.mean(errors_zyz)))
-    print("zyx has avg error {}".format(np.mean(errors_zyx)))
+    print("zyz has avg error {:.5f}".format(np.mean(errors_zyz)))
+    print("zyx has avg error {:.5f}".format(np.mean(errors_zyx)))
 
 
 if __name__ == "__main__":
@@ -383,7 +387,7 @@ if __name__ == "__main__":
     wrist_map_l2r = U.load_pickle_to_list(PATH_CALIB+'wrist_map_l2r.p', squeeze=True)
 
     # We're on stage 1, 2, or 3. ***ADJUST THIS***.
-    stage = 1
+    stage = 3
 
     if stage == 1:
         get_in_good_starting_position(arm1)
