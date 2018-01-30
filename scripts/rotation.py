@@ -8,7 +8,8 @@ dVRK.  Here's one way to do this (I'm not aware of a better way):
 
     1. With SNAP, have the dVRK grip a needle. The needle's tip will be used for
     determining positions. It doesn't have to be painted as we'll be clicking
-    its tip.
+    its tip. At this point, I need to compute the position of the needle wrt the
+    tool frame!
 
     2. With a known fixed position vector, we set the orientation of the dVRK to
     have zero value for yaw, pitch, and roll. Hence the rotation R_{st} matrix
@@ -59,7 +60,7 @@ ROT_FILE = 'scripts/files_rotations/rotations_data.p'
 TIP_FILE = 'scripts/files_rotations/needle_tip_data.p'
 Z_OFFSET = 0.008
 HOME_POS_ARM1 = [0.0982,  0.0126, -0.105]
-HOME_ROT_ARM1 = [0.0,     0.0,     160.0]
+HOME_ROT_ARM1 = [0.0,     0.0,     180.0]
 
 
 def get_in_good_starting_position(arm, which='arm1'):
@@ -79,7 +80,7 @@ def get_in_good_starting_position(arm, which='arm1'):
     print(pos, rot)
     print("(Goal was: {} and {}".format(HOME_POS_ARM1, HOME_ROT_ARM1))
     R = U.rotation_matrix_3x3_axis(angle=180, axis='z')
-    print("With rotation matrix:\n{}".format(R))
+    print("With desired rotation matrix:\n{}".format(R))
     print("Now exiting...")
     sys.exit()
 
@@ -177,17 +178,70 @@ def get_tip_needle(arm, d, idx, rot_targ):
 def collect_tip_data(arm1, R_real, R_desired, wrist_map_c2l, d):
     """ Collects data points on the needle tips.
     
-    We want to be at rotation [0, 0, 180] (equivalently, -180 for the last
-    part, the `roll`) so that we can assume we know the rotation matrix. Assumes
-    that the roll belongs to the z-axis. Due to imperfections, we won't get this
-    exactly.
+    We want to be at rotation [0, 0, 180] (equivalently, -180 for the last part,
+    the `roll`) so that we can assume we know the rotation matrix. Assumes that
+    the roll belongs to the z-axis. Due to imperfections, we won't be exact.
 
     The goal here is to determine as best an estimate of the position of the
     needle TIP wrt the TOOL frame as possible. We'll run this through several
     different positions, each time clicking to get an estimate, and then we
     average those together.
     """
-    pass
+    data = defaultdict(list)
+    home_pos = np.copy(HOME_POS_ARM1)
+    home_rot = np.copy(HOME_ROT_ARM1)
+    assert (home_rot[0] == 0 and home_rot[1] == 0 and home_rot[2] == 180)
+    idx = 0
+
+    # Slightly adjust position to get different data points in x-y dims.
+    deltas_meters = [-0.009, -0.003, 0.003, 0.009]
+
+    # NOW begin the loop over different possible positions. Obviously we need to
+    # always go to the `home_rot`, though some imprecisions will result.
+    for dx in deltas_meters:
+        for dy in deltas_meters:
+            idx += 1
+            pos_tool_wrt_base_targ = [home_pos[0]+dx, home_pos[1]+dy, home_pos[2]]
+            U.move(arm, pos_tool_wrt_base_targ, home_rot)
+            time.sleep(2)
+            pos_tool_wrt_base_code, rot_tool_wrt_base_code = U.pos_rot_arm(arm, nparrays=True)
+
+            # A human now clicks on the windows to get needle TIP position.
+            # Unfortunately this calibration may be quite erroneous, but if we
+            # save all the files we might be able to re-run w/out re-clicking.
+            needle_tip_c = get_tip_needle(arm, d, idx, home_rot)
+            needle_tip_c_h = np.concatenate( (needle_tip_c,np.ones(1)) )
+            needle_tip_l = wrist_map_c2l.dot(needle_tip_c_h)
+
+            # Compute the needle tip wrt TOOL frame; approximate with R_z(roll).
+            roll = rot_tool_wrt_base_code[2]
+            R = U.rotation_matrix_3x3_axis(angle=roll, axis='z')
+            Rinv = np.linalg.inv(R)
+            needle_tip_r = Rinv.dot( needle_tip_l - pos_tool_wrt_base_code )
+
+            # Bells and whistles, a bit inefficient but whatever.
+            data['pos_tool_wrt_s_targ'].append(pos_tool_wrt_base_targ)
+            data['pos_tool_wrt_s_code'].append(pos_tool_wrt_base_code)
+            data['rot_tool_wrt_s_targ'].append(home_rot)
+            data['rot_tool_wrt_s_code'].append(rot_tool_wrt_base_code)
+            data['pos_ntip wrt_c'].append(needle_tip_c)
+            data['pos_ntip_wrt_s'].append(needle_tip_l)
+            data['pos_ntip_wrt_r'].append(needle_tip_r)
+
+            print("\nAdding {}-th data point for `collect_tip_data()`.".format(idx))
+            print("pos_tool_wrt_s_targ:  {}".format(pos_tool_wrt_base_targ))
+            print("pos_tool_wrt_s_code:  {}".format(pos_tool_wrt_base_code))
+            print("rot_tool_wrt_s_targ:  {}".format(home_rot))
+            print("rot_tool_wrt_s_code:  {}".format(rot_tool_wrt_base_code))
+            print("pos_ntip wrt_c:       {}".format(needle_tip_c))
+            print("pos_ntip_wrt_s:       {}".format(needle_tip_l))
+            print("pos_ntip_wrt_r:       {}".format(needle_tip_r))
+                
+    # This was the whole point of the method.
+    print("\nFinished collecting data for computing needle_tip_r.")
+    for idx,item in enumerate(data['pos_ntip_wrt_r']):
+        print("{}, {}".format(item, idx))
+    return data
 
 
 def collect_data(arm, R, wrist_map_c2l, d):
@@ -199,7 +253,8 @@ def collect_data(arm, R, wrist_map_c2l, d):
 
     Needs to be called directly after `collect_tip_data()` so that the position
     of the needle tip wrt the TOOL frame is the same as earlier when we were
-    explicitly computing/estimating that in `collect_tip_data()`.
+    explicitly computing/estimating that in `collect_tip_data()`. We don't
+    actually need the `n_t` data here as that's needed in the LAST step.
     """
     R_z = R
     pos, rot = U.pos_rot_arm(arm, nparrays=True)
@@ -245,7 +300,7 @@ def collect_data(arm, R, wrist_map_c2l, d):
                 pos, rot = U.pos_rot_arm(arm, nparrays=True)
 
                 # A human now clicks on the windows to get needle TIP position.
-                # Actually we probably shouldn't use this specific `R` as we may
+                # Actually we probably shouldn't use this specific map as we may
                 # get better calibration later, but it doesn't hurt to include.
                 needle_tip_c = get_tip_needle(arm, d, idx, rot_targ)
                 needle_tip_c_h = np.concatenate( (needle_tip_c,np.ones(1)) )
@@ -268,8 +323,10 @@ def collect_data(arm, R, wrist_map_c2l, d):
     return data
 
 
-def determine_rotation(data):
-    """ Determines the rotation matrix based on data from `collect_data()`. """
+def determine_rotation(arm, d, tip_data, rot_data):
+    """ 
+    Determines the rotation matrix based on data from `collect_data()`. 
+    """
     pass
 
 
@@ -280,7 +337,7 @@ if __name__ == "__main__":
     wrist_map_l2r = U.load_pickle_to_list(PATH_CALIB+'wrist_map_l2r.p', squeeze=True)
 
     # We're on stage 1, 2, or 3. ***ADJUST THIS***.
-    stage = 2
+    stage = 1
 
     if stage == 1:
         get_in_good_starting_position(arm1)
@@ -288,8 +345,8 @@ if __name__ == "__main__":
     elif stage == 2:
         assert not os.path.isfile(ROT_FILE)
         assert not os.path.isfile(TIP_FILE)
-        arm1.open_gripper(60)
-        time.sleep(2)
+        arm1.open_gripper(60) 
+        time.sleep(2) # PUT NEEDLE INSIDE THE GRIPPER, WITH SNAP!
         arm1.close_gripper()
         pos, rot = U.pos_rot_arm(arm1, nparrays=True)
         print("starting position and rotation:")
@@ -301,17 +358,19 @@ if __name__ == "__main__":
         print("With actual rotation matrix:\n{}".format(R_real))
         print("With desired rotation matrix:\n{}".format(R_desired))
 
-        # Get position of the needle TIP wrt the base.
+        # Get position of the needle TIP wrt the TOOL frame.
         tip_data = collect_tip_data(arm1, R_real, R_desired, wrist_map_c2l, d)
         U.store_pickle(fname=TIP_FILE, info=tip_data)
 
         # Now collect data from different rotations, using SAME needle grip.
-        data = collect_data(arm1, R_real, wrist_map_c2l, d)
-        U.store_pickle(fname=ROT_FILE, info=data)
+        # This is why the code must be run sequentially in the same stage.
+        rot_data = collect_data(arm1, R_real, wrist_map_c2l, d)
+        U.store_pickle(fname=ROT_FILE, info=rot_data)
 
     elif stage == 3:
         # Collect data and determine most accurate rotation matrix.
-        # TODO: load...
-        determine_rotation(data)
+        tip_data = U.load_pickle_to_list(TIP_FILE, squeeze=True)
+        rot_data = U.load_pickle_to_list(ROT_FILE, squeeze=True)
+        determine_rotation(arm1, d, tip_data, rot_data)
     else: 
         raise ValueError()
