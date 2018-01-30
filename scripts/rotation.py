@@ -239,8 +239,11 @@ def collect_tip_data(arm1, R_real, R_desired, wrist_map_c2l, d):
                 
     # This was the whole point of the method.
     print("\nFinished collecting data for computing needle_tip_r.")
+    n_t = np.zeros(3)
     for idx,item in enumerate(data['pos_ntip_wrt_r']):
         print("{}, {}".format(item, idx))
+        n_t += item
+    print("average `n_t` to use later: {}\n".format(n_t))
     return data
 
 
@@ -311,8 +314,8 @@ def collect_data(arm, R, wrist_map_c2l, d):
                 data['pos_tool_wrt_s_code'].append(pos)
                 data['rot_tool_wrt_s_targ'].append(rot_targ)
                 data['rot_tool_wrt_s_code'].append(rot)
-                data['pos_needle_tip_wrt_c_clicks'].append(needle_tip_c)
-                data['pos_needle_tip_wrt_s'].append(needle_tip_l)
+                data['pos_ntip_wrt_c_clicks'].append(needle_tip_c)
+                data['pos_ntip_wrt_s'].append(needle_tip_l)
 
                 print("\nAdding {}-th data point".format(idx))
                 print("TARGET (yaw,pitch,roll):  {}".format(rot_targ))
@@ -324,10 +327,53 @@ def collect_data(arm, R, wrist_map_c2l, d):
 
 
 def determine_rotation(arm, d, tip_data, rot_data):
-    """ 
-    Determines the rotation matrix based on data from `collect_data()`. 
+    """ Determines the rotation matrix based on data from `collect_data()`.  
+    
+    We use the same `n_t` computed from earlier for all data points, and
+    evaluate based on L2 norm. For the translation vector and the rotations, we
+    use what is derived form code, which is slightly different from the value we
+    commanded the dVRK to go to (obviously).
     """
-    pass
+    n_t = np.zeros(3)
+    for this_n_t in tip_data['pos_ntip_wrt_r']:
+        n_t += this_n_t
+    n_t /= len(tip_data['pos_ntip_wrt_r'])
+
+    K = len(rot_data['pos_ntip_wrt_s'])
+    errors_zyz = []
+    errors_zyx = []
+
+    for k in range(K):
+        lhs  = rot_data['pos_ntip_wrt_s'][k]
+        t_st = rot_data['pos_tool_wrt_s_code'][k]
+        ypr  = rot_data['rot_tool_wrt_s_code'][k]
+        yaw, pitch, roll = ypr[0], ypr[1], ypr[2]
+
+        # R_zyz
+        R_z1 = U.rotation_matrix_3x3_axis(angle=roll,  axis='z')
+        R_y  = U.rotation_matrix_3x3_axis(angle=pitch, axis='y')
+        R_z2 = U.rotation_matrix_3x3_axis(angle=yaw,   axis='z')
+        R_zyz = R_z2.dot(R_y).dot(R_z1)
+
+        # R_zyx
+        R_x = U.rotation_matrix_3x3_axis(angle=roll,  axis='x')
+        R_y = U.rotation_matrix_3x3_axis(angle=pitch, axis='y')
+        R_z = U.rotation_matrix_3x3_axis(angle=yaw,   axis='z')
+        R_zyx = R_z.dot(R_y).dot(R_x)
+
+        # Evaluate!
+        rhs_zyz = t_st + R_zyz.dot( n_t )
+        rhs_zyx = t_st + R_zyx.dot( n_t )
+        err_zyz = np.linalg.norm(lhs - rhs_zyz)
+        err_zyx = np.linalg.norm(lhs - rhs_zyx)
+        errors_zyz.append( err_zyz )
+        errors_zyx.append( err_zyx )
+        print("err_zyz: {} for {}-th sample".format(err_zyz, idx))
+        print("err_zyx: {} for {}-th sample".format(err_zyx, idx))
+
+    print("\nDone with evaluation!")
+    print("zyz has avg error {}".format(np.mean(errors_zyz)))
+    print("zyx has avg error {}".format(np.mean(errors_zyx)))
 
 
 if __name__ == "__main__":
