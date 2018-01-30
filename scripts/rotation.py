@@ -57,7 +57,7 @@ np.set_printoptions(suppress=True, precision=5)
 PATH_CALIB = 'calibration/'
 ROT_FILE = 'scripts/files_rotations/rotations_data.p'
 Z_OFFSET = 0.008
-HOME_POS_ARM1 = [0.0982,  0.0226, -0.105]
+HOME_POS_ARM1 = [0.0982,  0.0126, -0.105]
 HOME_ROT_ARM1 = [0.0,     0.0,     160.0]
 
 
@@ -132,213 +132,48 @@ def click(event, x, y, flags, param):
         cv2.imshow(thisname, image)
 
 
-def click_stuff(which):
+def get_tip_needle(arm, d, idx, rot_targ):
     """ 
-    Putting this here since we repeat for left and right camera images.  We
-    actually use this for both offset computation AND the evaluation stage, but
-    we only run one of those in the code which means CENTERS and POINTS won't
-    mess us up with unexpected values.
+    Now the user has to click to get the needle tips. We click twice, one for
+    the left and one for the right, and return the camera coordinates.
     """
     global CENTERS, image
-    if which == 'left':
-        image = np.copy(d.left['raw'])
-    elif which == 'right':
-        image = np.copy(d.right['raw'])
-    max_points = 2
-    current_points = 0
+    pos, rot = U.pos_rot_arm(arm, nparrays=True)
     old_len = len(CENTERS)
 
-    while current_points < max_points:
-        name = "{} image w/{} current pts so far. DRAG BOXES around tip, THEN space bar, THEN gripper, THEN space bar".format(which.upper(), current_points)
-        cv2.namedWindow(name, cv2.WINDOW_NORMAL)
-        cv2.setMouseCallback(name, click) # Record clicks to this window!
-        cv2.resizeWindow(name, 1800, 2600)
-        cv2.imshow(name, image)
-        key = cv2.waitKey(0)
-        if key in U.ESC_KEYS:
-            sys.exit()
-        cv2.destroyAllWindows()
-        current_points += 1
+    # Left camera image.
+    w = "{}-th rot_targ: {}, left camera. Drag boxes on needle tip, then SPACE.".format(
+            idx, rot_targ)
+    image = np.copy(d.left['raw'])
+    cv2.namedWindow(w, cv2.WINDOW_NORMAL)
+    cv2.setMouseCallback(w, click)
+    cv2.resizeWindow(w, 1800, 2600)
+    cv2.imshow(w, image)
+    key = cv2.waitKey(0)
+    if key in U.ESC_KEYS:
+        sys.exit()
+    cv2.destroyAllWindows()
+
+    # Right camera image.
+    w = "{}-th rot_targ: {}, right camera. Drag boxes on needle tip, then SPACE.".format(
+            idx, rot_targ)
+    image = np.copy(d.right['raw'])
+    cv2.namedWindow(w, cv2.WINDOW_NORMAL)
+    cv2.setMouseCallback(w, click)
+    cv2.resizeWindow(w, 1800, 2600)
+    cv2.imshow(w, image)
+    key = cv2.waitKey(0)
+    if key in U.ESC_KEYS:
+        sys.exit()
+    cv2.destroyAllWindows()   
 
     assert len(CENTERS) == old_len + 2
     assert len(POINTS) % 2 == 0
-    print("finished clicking on {} image".format(which))
+    needle_tip_c = U.camera_pixels_to_camera_coords(CENTERS[-2], CENTERS[-1], nparrays=True)
+    return needle_tip_c
 
 
-def offsets(arm, d, args, wrist_map_c2l, wrist_map_c2r, wrist_map_l2r):
-    """ Stage 1. 
-    
-    1. Before running the python script, get the setup as shown in the image in
-    the README where the needle is on the foam and the dVRK (w/SNAP) is about to
-    grip it. 
-    
-    2. Then, this code waits until the user has manipulated master tools to pick
-    up the needle at some location. EDIT: actually it's easier to just move and
-    then assume we translate up by a few mm. I'm getting lack of responses with
-    the master tools, for some reason. So just move it directly and explicitly.
-    
-    3. Images will pop-up. Press ESC to terminate the program. Otherwise, we
-    click and crop: (a) the end-point of the needle AND (b) the place where the
-    dVRK grasps the needle. The latter is mainly to see if this coincides with
-    the dVRK's actual position. MUST BE DONE IN ORDER!
-    
-    4. This saves into a pickle file by appending, so in theory we continually
-    add data points. (The main catch is to check that if we change the setup,
-    we're NOT counting those older points.)
-    
-    Repeat the process by moving the master tools again, and go to step 2.
-    """
-    global CENTERS, image
-    which = 'left' if args.arm==1 else 'right'
-    pname = args.path_offsets+'/offsets_{}_arm_data.p'.format(which)
-    if which == 'left':
-        R = wrist_map_c2l
-    else:
-        R = wrist_map_c2r
-    num_offsets = 0
-
-    while True:
-        # Just an overall view before grabbing needle. OK to only see the left
-        # image. And BTW, this is when we change the dVRK to get more data.
-        arm.open_gripper(50)
-        print("\nNow starting new offset with {} offsets so far...".format(num_offsets))
-        name = "Left image w/{} offsets so far. MOVE DVRK, press any key".format(num_offsets)
-        U.call_wait_key( cv2.imshow(name, d.left['raw']) )
-        arm.close_gripper()
-        pos,rot = U.pos_rot_arm(arm, nparrays=True)
-        pos[2] += args.z_height
-        U.move(arm, pos, rot)
-        time.sleep(2)
-
-        # The user now clicks stuff. LEFT CAMERA, then RIGHT CAMERA.
-        click_stuff('left')
-        click_stuff('right')
-
-        # Compute data to store. We stored left tip, left grip, right tip, right grip.
-        pos_g,rot_g = U.pos_rot_arm(arm, nparrays=True)
-        assert len(CENTERS) % 4 == 0, "Error, len(CENTERS): {}".format(len(CENTERS))
-        camera_tip  = U.camera_pixels_to_camera_coords(CENTERS[-4], CENTERS[-2], nparrays=True)
-        camera_grip = U.camera_pixels_to_camera_coords(CENTERS[-3], CENTERS[-1], nparrays=True)
-
-        # Map stuff to stuff. The `h` in `xyz_h` refers to homogeneous coordinates.
-        ct_h = np.concatenate( (camera_tip,np.ones(1)) )
-        cg_h = np.concatenate( (camera_grip,np.ones(1)) )
-        base_t = R.dot(ct_h)
-        base_g = R.dot(cg_h)
-        camera_dist = np.linalg.norm( camera_tip-camera_grip )
-
-        # Distance based on click interace (should be same as camera) and based
-        # on dvrk, using cartesian position function (this will be different).
-        # Unfortunately the dvrk one is the easiest to use in real applications.
-        base_dist_click = np.linalg.norm( base_t-base_g )
-        base_dist_dvrk  = np.linalg.norm( base_t-pos_g )
-        assert np.abs(base_dist_click - camera_dist) < 1e-5
-
-        # Compute offset vector wrt base frame. I don't think the order of
-        # subtraction matters as long as in real applications, we are consistent
-        # with usage, so in application we'd do (pos_n_tip_wrt_base)-(offset).
-        offset_wrt_base_click = base_t - base_g
-        offset_wrt_base_dvrk  = base_t - pos_g
-
-        phi_c, psi_c = compute_phi_and_psi(d=base_dist_click)
-        phi_d, psi_d = compute_phi_and_psi(d=base_dist_dvrk)
-
-
-def evaluate(arm, d, args, wrist_map_c2l, wrist_map_c2r, wrist_map_l2r):
-    """ Stage 2. 
-    
-    Testing stage. At a high level, move the dVRK end-effector to various
-    locations and once again explicitly record needle tips. Steps:
-
-    1. Start with the dVRK gripping a needle. Try different orientations, to
-    ensure that performance is orientation-invariant. This time, we should have
-    the suturing phantom there! For now we still have the click interface to
-    accurately compute psi.
-
-    2. To get psi, images pop up from left and right cameras. Press ESC to
-    terminate the program. If we want to proceed, then click and drag boxes of
-    target locations for the needle tip.
-    
-    3. This time, we let the needle move. We do NOT explicitly compute an offset
-    vector because we do not know where the dVRK's end-effector goes.
-    """
-    global CENTERS, image
-    which = 'left' if args.arm==1 else 'right'
-    pname = args.path_offsets+'/offsets_{}_arm_data.p'.format(which)
-    if which == 'left':
-        R = wrist_map_c2l
-    else:
-        R = wrist_map_c2r
-    offsets = U.load_pickle_to_list(pname)
-    print("loaded offsets, length: {}".format(len(offsets)))
-
-    # Do stuff here just to grip the needle and get set up for computing phi/psi.
-    arm.open_gripper(50)
-    name = "Left image for evaluation stage. MOVE DVRK, then press any key"
-    U.call_wait_key( cv2.imshow(name, d.left['raw']) )
-    arm.close_gripper()
-    pos,rot = U.pos_rot_arm(arm, nparrays=True)
-    pos[2] += args.z_height
-    U.move(arm, pos, rot)
-    time.sleep(2)
-
-    # The user now clicks stuff. LEFT CAMERA, then RIGHT CAMERA.
-    click_stuff('left')
-    click_stuff('right')
-    assert len(CENTERS) == 4, "Error, len(CENTERS): {}".format(len(CENTERS))
-    assert len(POINTS) == 8, "Error, len(POINTS): {}".format(len(POINTS))
-
-    # New to this method: move the dVRK to a different location.
-    print("Not moving to a new spot, for now.")
-
-    # Now we can actually get phi/psi.
-    pos_g,rot_g = U.pos_rot_arm(arm, nparrays=True)
-    camera_tip  = U.camera_pixels_to_camera_coords(CENTERS[-4], CENTERS[-2], nparrays=True)
-    camera_grip = U.camera_pixels_to_camera_coords(CENTERS[-3], CENTERS[-1], nparrays=True)
-    ct_h        = np.concatenate( (camera_tip,np.ones(1)) )
-    cg_h        = np.concatenate( (camera_grip,np.ones(1)) )
-    base_t      = R.dot(ct_h)
-    base_g      = R.dot(cg_h)
-    camera_dist = np.linalg.norm( camera_tip-camera_grip )
-
-    # Distance based on click interace (should be same as camera) and based
-    # on dvrk, using cartesian position function (this will be different).
-    # Unfortunately the dvrk one is the easiest to use in real applications.
-    base_dist_click = np.linalg.norm( base_t-base_g )
-    base_dist_dvrk  = np.linalg.norm( base_t-pos_g )
-    assert np.abs(base_dist_click - camera_dist) < 1e-5
-
-    # Compute phi and psi based on the STARTING configuration.
-    phi_c, psi_c = compute_phi_and_psi(d=base_dist_click)
-    phi_d, psi_d = compute_phi_and_psi(d=base_dist_dvrk)
-
-    # --------------------------------------------------------------------------
-    # Compute offset vector wrt base. I don't think the order of subtraction
-    # matters as long as in real applications, we are consistent with usage, so
-    # in application we'd do (pos_n_tip_wrt_base)-(offset). 
-    #
-    # NOTE: this is only the offset vector wrt the starting position that we
-    # have, but there are two hypotheses. 
-    #
-    #   1. That we can avoid computing these if we pre-compute before hand (as
-    #   we have code for) so maybe we don't need a click interface. 
-    #   2. To get the needle to go somewhere, it's a matter of doing the
-    #   arithmetic as specified earlier in the comments! 
-    #
-    # For now we'll compute the two offsets wrt base because we might as well
-    # use it to simplify the task (but this is only simplifying the detection of
-    # the needle tip and where the dVRK grips it).
-    # --------------------------------------------------------------------------
-    offset_wrt_base_click = base_t - base_g
-    offset_wrt_base_dvrk  = base_t - pos_g
-    offset_saved =  get_offset(offsets, psi=psi_c, kind='click', which=which, debug=True)
-
-    print("offset_wrt_base_click: {}".format(offset_wrt_base_click))
-    print("offset_wrt_base_dvrk:  {}".format(offset_wrt_base_dvrk))
-    print("offset_saved:          {}".format(offset_saved))
-
-
-def collect_data(arm, R, wrist_map_c2l):
+def collect_data(arm, R, wrist_map_c2l, d):
     """ Collects data points to determine which rotation matrix we're using.
 
     The `t_st` and `R_st` define the rigid body from the tool to the arm base.
@@ -389,16 +224,20 @@ def collect_data(arm, R, wrist_map_c2l):
                 pos, rot = U.pos_rot_arm(arm, nparrays=True)
 
                 # A human now clicks on the windows to get needle TIP position.
-                wname = "our {}-th TARGET rotation is {}".format(idx, rot_targ)
-                # TODO
+                # Actually we probably shouldn't use this specific `R` as we may
+                # get better calibration later, but it doesn't hurt to include.
+                needle_tip_c = get_tip_needle(arm, d, idx, rot_targ)
+                needle_tip_c_h = np.concatenate( (needle_tip_c,np.ones(1)) )
+                needle_tip_l = wrist_map_c2l.dot(needle_tip_c_h)
 
                 # Bells and whistles, a bit inefficient but whatever.
-                data['pos_s_tip'].append(None) # TODO
-                data['pos_t_tip'].append(None) # TODO
-                data['t_st'].append(t_st)
-                data['pos_s_tool'].append(pos)
-                data['rot_s_targ'].append(rot_targ)
-                data['rot_s_real'].append(rot)
+                data['pos_tool_wrt_s_targ'].append(t_st)
+                data['pos_tool_wrt_s_code'].append(pos)
+                data['rot_tool_wrt_s_targ'].append(rot_targ)
+                data['rot_tool_wrt_s_code'].append(rot)
+                data['pos_needle_tip_wrt_c_clicks'].append(needle_tip_c)
+                data['pos_needle_tip_wrt_s'].append(needle_tip_l)
+
                 print("\nAdding {}-th data point".format(idx))
                 print("TARGET (yaw,pitch,roll):  {}".format(rot_targ))
                 print("Actual (yaw,pitch,roll):  {}".format(rot))
@@ -414,30 +253,35 @@ def determine_rotation(data):
 
 
 if __name__ == "__main__":
-    assert not os.path.isfile(ROT_FILE)
     arm1, _, d = U.init()
     wrist_map_c2l = U.load_pickle_to_list(PATH_CALIB+'wrist_map_c2l.p', squeeze=True)
     wrist_map_c2r = U.load_pickle_to_list(PATH_CALIB+'wrist_map_c2r.p', squeeze=True)
     wrist_map_l2r = U.load_pickle_to_list(PATH_CALIB+'wrist_map_l2r.p', squeeze=True)
 
-    # If necessary. Comment this out as needed.
-    #get_in_good_starting_position(arm1)
+    # We're on stage 1, 2, or 3. ***ADJUST THIS***.
+    stage = 3
 
-    # Otherwise we proceed with what we really want: collecting data.
-    arm1.open_gripper(60)
-    time.sleep(2)
-    arm1.close_gripper()
-    pos, rot = U.pos_rot_arm(arm1, nparrays=True)
-    print("starting position and rotation:")
-    print(pos, rot)
-    print("HOME_POS_ARM1: {}".format(HOME_POS_ARM1))
-    print("HOME_ROT_ARM1: {}".format(HOME_ROT_ARM1))
-    R_real    = U.rotation_matrix_3x3_axis(angle=rot[2], axis='z')
-    R_desired = U.rotation_matrix_3x3_axis(angle=180, axis='z')
-    print("With actual rotation matrix:\n{}".format(R_real))
-    print("With desired rotation matrix:\n{}".format(R_desired))
-
-    # Collect data and determine most accurate rotation matrix.
-    data = collect_data(arm1, R_real, wrist_map_c2l)
-    U.store_pickle(fname=ROT_FILE, info=data)
-    determine_rotation(data)
+    if stage == 1:
+        get_in_good_starting_position(arm1)
+    elif stage == 2:
+        assert not os.path.isfile(ROT_FILE)
+        # Collect data and save it.
+        arm1.open_gripper(60)
+        time.sleep(2)
+        arm1.close_gripper()
+        pos, rot = U.pos_rot_arm(arm1, nparrays=True)
+        print("starting position and rotation:")
+        print(pos, rot)
+        print("HOME_POS_ARM1: {}".format(HOME_POS_ARM1))
+        print("HOME_ROT_ARM1: {}".format(HOME_ROT_ARM1))
+        R_real    = U.rotation_matrix_3x3_axis(angle=rot[2], axis='z')
+        R_desired = U.rotation_matrix_3x3_axis(angle=180, axis='z')
+        print("With actual rotation matrix:\n{}".format(R_real))
+        print("With desired rotation matrix:\n{}".format(R_desired))
+        data = collect_data(arm1, R_real, wrist_map_c2l, d)
+        U.store_pickle(fname=ROT_FILE, info=data)
+    elif stage == 3:
+        # Collect data and determine most accurate rotation matrix.
+        determine_rotation(data)
+    else: 
+        raise ValueError()
