@@ -1,8 +1,5 @@
 # Fast Surgical Suturing
 
-The goal of this project is to do some fast surgical suturing. We should submit
-a paper before the Spring 2018 semester ends.
-
 Look at the individual repository READMEs, which have LOTS of detail.
 
 This does NOT do any calibration whatsoever. Use the debridement repository for
